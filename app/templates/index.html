@@ -1,0 +1,220 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>LUCID DDoS Dashboard</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  </head>
+  <body>
+    <header>
+      <h1>LUCID DDoS Detection</h1>
+      <div id="status">Status: <span id="statusText">loading...</span></div>
+    </header>
+
+    <section class="controls">
+      <h2>Start Monitoring</h2>
+      <div class="form-row">
+        <label>Source (iface or .pcap):</label>
+        <input id="source" placeholder="eth0 or /path/to/file.pcap" />
+      </div>
+      <div class="form-row">
+        <label>Model path (.h5):</label>
+        <input id="model" placeholder="./output/10t-10n-DOS2019-LUCID.h5" />
+      </div>
+      <div class="form-row">
+        <label>Dataset type (optional):</label>
+        <input id="datasetType" placeholder="DOS2019" />
+      </div>
+      <div class="form-row">
+        <label>Attack net (optional):</label>
+        <input id="attackNet" placeholder="172.16.0.0/24" />
+      </div>
+      <div class="form-row">
+        <label>Victim net (optional):</label>
+        <input id="victimNet" placeholder="192.168.50.0/24" />
+      </div>
+      <div class="form-row">
+        <label>Alert threshold (0-1):</label>
+        <input type="number" step="0.01" id="threshold" value="0.5" />
+      </div>
+      <div class="buttons">
+        <button id="startBtn">Start</button>
+        <button id="stopBtn">Stop</button>
+      </div>
+    </section>
+
+    <section class="charts">
+      <h2>Metrics</h2>
+      <div class="grid">
+        <canvas id="ddosChart"></canvas>
+        <canvas id="flowChart"></canvas>
+        <canvas id="portsChart"></canvas>
+        <canvas id="srcChart"></canvas>
+      </div>
+    </section>
+
+    <section class="alerts">
+      <h2>Alerts</h2>
+      <div id="alertBanner" class="banner hidden">ALERT: Potential DDoS detected</div>
+      <ul id="alertList"></ul>
+    </section>
+
+    <section class="mitigation">
+      <h2>Mitigation</h2>
+      <div class="form-row">
+        <label>Block sources (comma-separated):</label>
+        <input id="blockSources" placeholder="1.2.3.4, 5.6.7.8" />
+        <button id="blockBtn">Block</button>
+      </div>
+      <div class="form-row">
+        <label>Unblock sources (comma-separated):</label>
+        <input id="unblockSources" placeholder="1.2.3.4, 5.6.7.8" />
+        <button id="unblockBtn">Unblock</button>
+      </div>
+      <div class="form-row">
+        <strong>Currently blocked:</strong>
+        <span id="blockedList">(none)</span>
+      </div>
+    </section>
+
+    <script>
+      const statusEl = document.getElementById('statusText');
+      const alertBanner = document.getElementById('alertBanner');
+      const alertList = document.getElementById('alertList');
+      const blockedList = document.getElementById('blockedList');
+
+      async function refreshStatus() {
+        try {
+          const res = await fetch('/api/status');
+          const data = await res.json();
+          statusEl.textContent = data.status || 'unknown';
+          if (data.blocked_sources && data.blocked_sources.length) {
+            blockedList.textContent = data.blocked_sources.join(', ');
+          } else {
+            blockedList.textContent = '(none)';
+          }
+        } catch (e) {
+          statusEl.textContent = 'error';
+        }
+      }
+
+      refreshStatus();
+      setInterval(refreshStatus, 3000);
+
+      // Charts
+      const ddosCtx = document.getElementById('ddosChart').getContext('2d');
+      const flowCtx = document.getElementById('flowChart').getContext('2d');
+      const portsCtx = document.getElementById('portsChart').getContext('2d');
+      const srcCtx = document.getElementById('srcChart').getContext('2d');
+
+      const timeFmt = (ts) => new Date(ts * 1000).toLocaleTimeString();
+
+      function makeChart(ctx, label, color, yMin = 0, yMax = undefined) {
+        return new Chart(ctx, {
+          type: 'line',
+          data: { labels: [], datasets: [{ label, data: [], borderColor: color, tension: 0.2, pointRadius: 0 }]},
+          options: {
+            responsive: true,
+            scales: { y: { min: yMin, max: yMax } },
+            animation: false,
+          },
+        });
+      }
+
+      const ddosChart = new Chart(ddosCtx, {
+        type: 'line',
+        data: {
+          labels: [],
+          datasets: [
+            { label: 'DDOS Fraction', data: [], borderColor: '#e11d48', tension: 0.2, pointRadius: 0 },
+            { label: 'Forecast (next)', data: [], borderColor: '#f59e0b', borderDash: [6,4], tension: 0.2, pointRadius: 0 },
+          ]
+        },
+        options: { responsive: true, scales: { y: { min: 0, max: 1 } }, animation: false },
+      });
+      const flowChart = makeChart(flowCtx, 'Flow Density', '#2563eb');
+      const portsChart = makeChart(portsCtx, 'Unique Dest Ports', '#16a34a');
+      const srcChart = makeChart(srcCtx, 'Src IP Diversity', '#7c3aed');
+
+      function pushChartPoint(chart, ts, vals, maxPoints = 200) {
+        // vals can be single value or array per dataset index
+        chart.data.labels.push(timeFmt(ts));
+        const arr = Array.isArray(vals) ? vals : [vals];
+        arr.forEach((v, idx) => {
+          if (!chart.data.datasets[idx]) return;
+          chart.data.datasets[idx].data.push(v);
+        });
+        if (chart.data.labels.length > maxPoints) {
+          chart.data.labels.shift();
+          chart.data.datasets.forEach(ds => ds.data.shift());
+        }
+        chart.update();
+      }
+
+      // WebSocket stream
+      const wsProto = location.protocol === 'https:' ? 'wss' : 'ws';
+      const ws = new WebSocket(`${wsProto}://${location.host}/ws`);
+      ws.onmessage = (evt) => {
+        try {
+          const m = JSON.parse(evt.data);
+          const next = m.forecast?.ddos_fraction_next ?? null;
+          pushChartPoint(ddosChart, m.ts, [m.ddos_fraction, next]);
+          pushChartPoint(flowChart, m.ts, m.metrics.flow_density);
+          pushChartPoint(portsChart, m.ts, m.metrics.unique_dest_ports);
+          pushChartPoint(srcChart, m.ts, m.metrics.src_ip_diversity);
+
+          if (m.alert || m.forecast?.predicted_alert) {
+            alertBanner.classList.remove('hidden');
+            const item = document.createElement('li');
+            const pred = m.forecast?.predicted_alert && !m.alert ? ' (predicted next window)' : '';
+            item.textContent = `${timeFmt(m.ts)} ALERT${pred} — ddos_fraction=${m.ddos_fraction.toFixed(3)} (threshold ${m.threshold})`;
+            alertList.prepend(item);
+          } else {
+            alertBanner.classList.add('hidden');
+          }
+        } catch (e) {
+          console.error('Bad WS message', e);
+        }
+      };
+
+      // Controls
+      document.getElementById('startBtn').onclick = async () => {
+        const body = {
+          source: document.getElementById('source').value,
+          model_path: document.getElementById('model').value,
+          dataset_type: document.getElementById('datasetType').value || null,
+          attack_net: document.getElementById('attackNet').value || null,
+          victim_net: document.getElementById('victimNet').value || null,
+          threshold: parseFloat(document.getElementById('threshold').value || '0.5'),
+        };
+        const res = await fetch('/api/start', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+        if (!res.ok) alert('Failed to start');
+        refreshStatus();
+      };
+
+      document.getElementById('stopBtn').onclick = async () => {
+        const res = await fetch('/api/stop', { method: 'POST' });
+        if (!res.ok) alert('Failed to stop');
+        refreshStatus();
+      };
+
+      document.getElementById('blockBtn').onclick = async () => {
+        const txt = document.getElementById('blockSources').value.trim();
+        const list = txt ? txt.split(',').map(s => s.trim()).filter(Boolean) : [];
+        const res = await fetch('/api/mitigation', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ block_sources: list }) });
+        const data = await res.json();
+        blockedList.textContent = (data.blocked_sources || []).join(', ') || '(none)';
+      };
+
+      document.getElementById('unblockBtn').onclick = async () => {
+        const txt = document.getElementById('unblockSources').value.trim();
+        const list = txt ? txt.split(',').map(s => s.trim()).filter(Boolean) : [];
+        const res = await fetch('/api/mitigation', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ unblock_sources: list }) });
+        const data = await res.json();
+        blockedList.textContent = (data.blocked_sources || []).join(', ') || '(none)';
+      };
+    </script>
+  </body>
+  </html>

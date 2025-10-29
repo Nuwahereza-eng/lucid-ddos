@@ -263,6 +263,61 @@ In this case, the argument of option ```predict_live``` must be the path to a pc
 The output of LUCID on the victim machine will be similar to that reported in Section **Testing** above. 
 
 
+## Web-based Monitoring Dashboard
+
+This repository now includes a lightweight web application that wraps LUCID's live inference and exposes:
+
+- Real-time metrics (flow density, unique destination ports, source IP diversity, packet volume)
+- Deep learning anomaly detection (fraction of windows predicted DDoS in each time window)
+- Predictive/operational visibility via rolling charts and live alerts
+- A simple mitigation interface (simulated) to block selected source IPs from monitoring
+
+### Run the server
+
+1) Create/activate the Python 3.9 environment as described above (same TF 2.7.1 setup). Then install the extra packages:
+
+```
+pip install -r requirements.txt
+```
+
+2) Start the web server:
+
+```
+python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
+```
+
+3) Open the dashboard in your browser:
+
+```
+http://localhost:8000/
+```
+
+### Using the dashboard
+
+- Provide a source:
+	- A network interface (e.g., `eth0`) for live capture (requires tshark, see above), or
+	- A pcap file (e.g., `./sample-dataset/CIC-DDoS-2019-UDPLag.pcap`).
+- Provide a trained LUCID model (`.h5`) produced by `lucid_cnn.py` training (e.g., `./output/10t-10n-DOS2019-LUCID.h5`).
+- Optionally set `dataset_type`, `attack_net`, `victim_net` to compute accuracy metrics where labels are known.
+- Click Start to begin streaming; Stop to end.
+- Use the Mitigation panel to simulate blocking source IPs (they will be excluded from subsequent windows' metrics and scoring).
+
+The UI displays rolling charts for:
+
+- DDOS Fraction (per-time-window fraction of samples predicted as DDoS)
+- Flow Density (number of flows per window)
+- Unique Destination Ports
+- Source IP Diversity
+
+Alerts are raised when the `DDOS Fraction` exceeds the chosen threshold (default 0.5) for the current window.
+
+### Notes
+
+- The capture uses `pyshark`, which depends on `tshark` (see installation notes above). For offline `.pcap` replay, `tshark` is still required.
+- Time window and max flow length are automatically parsed from the model filename (`<t>t-<n>n-...h5`) with fallbacks to 10/10.
+- The web server streams data via WebSocket at `/ws` and provides control endpoints under `/api/*`.
+
+
 ## Acknowledgements
 
 If you are using LUCID's code for scientific research, please cite the related paper in your manuscript as follows:
