@@ -42,6 +42,8 @@
         <span style="margin-left:12px;">FPR: <strong id="kpiFPR">-</strong></span>
         <span style="margin-left:12px;">TTD (s): <strong id="kpiTTD">-</strong></span>
         <span style="margin-left:12px;">Prevented downtime (min): <strong id="kpiPD">0</strong></span>
+        <span style="margin-left:12px;">Counts: <strong id="kpiCounts">TP=0 FP=0 TN=0 FN=0</strong></span>
+        <span style="margin-left:12px;">Source: <strong id="kpiSrc">-</strong></span>
       </div>
     </header>
 
@@ -198,6 +200,8 @@
   const kpiFPR = document.getElementById('kpiFPR');
   const kpiTTD = document.getElementById('kpiTTD');
   const kpiPD = document.getElementById('kpiPD');
+  const kpiCounts = document.getElementById('kpiCounts');
+  const kpiSrc = document.getElementById('kpiSrc');
   const sourceKindEl = document.getElementById('sourceKind');
   const sourceEl = document.getElementById('source');
   const scanIfacesBtn = document.getElementById('scanIfacesBtn');
@@ -232,6 +236,13 @@
           }
           if (typeof data.prevented_downtime_min === 'number') {
             kpiPD.textContent = data.prevented_downtime_min.toFixed(2);
+          }
+          if (data.kpi_counts) {
+            const {TP=0,FP=0,TN=0,FN=0} = data.kpi_counts;
+            kpiCounts.textContent = `TP=${TP} FP=${FP} TN=${TN} FN=${FN}`;
+          }
+          if (data.kpi_source) {
+            kpiSrc.textContent = data.kpi_source;
           }
 
           // Blocked list: prefer mitigation with stages

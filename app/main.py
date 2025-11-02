@@ -122,11 +122,15 @@ class DetectorService:
         self._attack_start_ts: Optional[float] = None
         self._first_alert_ts: Optional[float] = None
         self._ttds: List[float] = []
+        # window-based indexing for robust TTD
+        self._window_index = 0
+        self._attack_start_window = None
 
         # downtime prevention accounting
         self._prevented_downtime_min = 0.0
         # KPI configuration
         self._gt_override = None
+        self._kpi_source = "none"  # dataset | http-labels | override | none
 
     # Diagnostics helpers
     @staticmethod
@@ -176,6 +180,8 @@ class DetectorService:
             "blocked_sources": list(self.blocked_sources),
             "mitigation": [{"ip": ip, "stage": state.get("stage", "rate-limit")} for ip, state in self._mitigation.items()],
             "accuracy": {"TPR": tpr, "FPR": fpr, "TTD_sec": ttd},
+            "kpi_counts": {"TP": self._tp, "FP": self._fp, "TN": self._tn, "FN": self._fn},
+            "kpi_source": self._kpi_source,
             "prevented_downtime_min": self._prevented_downtime_min,
         }
 
@@ -282,7 +288,16 @@ class DetectorService:
         }
 
         # labels (optional - for accuracy calc if dataset info provided)
-        self.labels = parse_labels(cfg.dataset_type, cfg.attack_net, cfg.victim_net)
+        # Try to auto-detect dataset type from source filename if not provided
+        inferred_dataset = None
+        try:
+            src_name = os.path.basename(str(cfg.source)).lower()
+            if any(tok in src_name for tok in ["cic-ddos-2019", "synflood", "udplag", "webddos", "dns"]):
+                inferred_dataset = "DOS2019"
+        except Exception:
+            pass
+        ds_type = cfg.dataset_type or inferred_dataset
+        self.labels = parse_labels(ds_type, cfg.attack_net, cfg.victim_net)
 
         # capture setup or external ingest
         if self._source_kind == "http":
@@ -292,6 +307,7 @@ class DetectorService:
             self._ingest = queue.Queue()
             data_source = "http-ingest"
             logger.info(f"Starting external ingest mode (HTTP) (tw={self.time_window}s, n={self.max_flow_len})")
+            self._kpi_source = "override" if (cfg.ground_truth_override in ("all_attack", "all_benign")) else "http-labels"
         else:
             resolved_source = self._resolve_source_path(cfg.source)
             logger.info(f"Starting capture: source={resolved_source} (tw={self.time_window}s, n={self.max_flow_len})")
@@ -322,9 +338,26 @@ class DetectorService:
                     )
                 self.cap_file = None
                 data_source = resolved_source
-
+            self._kpi_source = (
+                "override" if (cfg.ground_truth_override in ("all_attack", "all_benign")) else ("dataset" if self.labels is not None else "none")
+            )
+        
         self.threshold = cfg.threshold
         self._gt_override = cfg.ground_truth_override
+        # Reset KPI counters and mitigation state for a fresh run
+        self._tp = self._fp = self._tn = self._fn = 0
+        self._attack_active = False
+        self._attack_start_ts = None
+        self._first_alert_ts = None
+        self._ttds = []
+        self._window_index = 0
+        self._attack_start_window = None
+        self._history = []
+        self.blocked_sources.clear()
+        self._mitigation.clear()
+        self._prevented_downtime_min = 0.0
+        self._consecutive_alerts = 0
+        self._ewma_ddos = None
         self._stop_event.clear()
         self._status = "running"
         self._last_error = None
@@ -543,18 +576,22 @@ class DetectorService:
                         self._fn += 1
                     else:
                         self._tn += 1
-                    # TTD
+                    # TTD (window-based): count windows between attack start and first alert
                     if ddos_true and not self._attack_active:
                         self._attack_active = True
                         self._attack_start_ts = time.time()
+                        self._attack_start_window = self._window_index
                         self._first_alert_ts = None
-                    if self._attack_active and alert and self._first_alert_ts is None and self._attack_start_ts is not None:
+                    if self._attack_active and alert and self._first_alert_ts is None and self._attack_start_window is not None:
                         self._first_alert_ts = time.time()
-                        self._ttds.append(self._first_alert_ts - self._attack_start_ts)
+                        # At minimum, detection happens within the first attack window
+                        windows_elapsed = max(1, self._window_index - self._attack_start_window + 1)
+                        self._ttds.append(windows_elapsed * float(self.time_window))
                     if (not ddos_true) and self._attack_active:
                         # reset when attack window ends
                         self._attack_active = False
                         self._attack_start_ts = None
+                        self._attack_start_window = None
                         self._first_alert_ts = None
 
                 payload = {
@@ -603,6 +640,9 @@ class DetectorService:
                 else:
                     # Loop not set yet; skip broadcast
                     logger.warning("Async loop not set; skipping broadcast for this window")
+
+                # advance window index after completing this window
+                self._window_index += 1
 
             except Exception as e:
                 try:
