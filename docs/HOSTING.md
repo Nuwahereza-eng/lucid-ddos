@@ -19,6 +19,7 @@ Render supports Docker-based web services with a free tier suitable for demos.
 
 Without Docker on Render (Native Python):
 
+- Add a `runtime.txt` at repo root with: `python-3.10.13` (avoids Python 3.13 incompatibilities with TensorFlow)
 - Build Command: `pip install -r requirements-hosted.txt`
 - Start Command: `uvicorn app.main:app --host 0.0.0.0 --port $PORT`
 - (Optional) Add `Procfile` with the same start command; some platforms detect this automatically.
