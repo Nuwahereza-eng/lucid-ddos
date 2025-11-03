@@ -20,9 +20,11 @@ Render supports Docker-based web services with a free tier suitable for demos.
 Without Docker on Render (Native Python):
 
 - Add a `runtime.txt` at repo root with: `python-3.10.13` (avoids Python 3.13 incompatibilities with TensorFlow)
-- Build Command: `pip install -r requirements-hosted.txt`
+- Build Command: `python -m pip install -U pip setuptools wheel && pip install -r requirements-hosted.txt`
 - Start Command: `uvicorn app.main:app --host 0.0.0.0 --port $PORT`
 - (Optional) Add `Procfile` with the same start command; some platforms detect this automatically.
+
+Note: `requirements-hosted.txt` pins FastAPI to 0.95.x and Pydantic 1.10.x to satisfy TensorFlow 2.12’s dependency on typing-extensions<4.6. If your code uses Pydantic v2 features, tell us and we’ll bump TF and adjust pins instead.
 
 Notes:
 

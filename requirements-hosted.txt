@@ -1,7 +1,15 @@
-fastapi==0.115.0
-uvicorn[standard]==0.30.6
+typing-extensions==4.5.0
+
+# FastAPI + Pydantic v1 (compatible with typing-extensions<4.6 required by TF 2.12)
+fastapi==0.95.2
+pydantic==1.10.13
+uvicorn[standard]==0.22.0
+
+# Core runtime
 numpy==1.23.5
-pydantic==2.6.4
+h5py==3.8.0
+protobuf==3.20.3
 pyshark==0.6
-# Lighter CPU-only TF with broader Python compatibility for hosted demos
+
+# TensorFlow CPU (wheels available for Python 3.10)
 tensorflow-cpu==2.12.1
