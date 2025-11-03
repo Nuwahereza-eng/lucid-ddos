@@ -10,7 +10,7 @@ import subprocess
 from typing import Optional, List, Dict, Any
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, UploadFile, File, Form, HTTPException, Request
-from fastapi.responses import HTMLResponse, FileResponse, JSONResponse
+from fastapi.responses import HTMLResponse, FileResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -783,8 +783,17 @@ async def demo_auth_middleware(request: Request, call_next):
 
 
 @app.get("/", response_class=HTMLResponse)
-def index():
+def index(request: Request):
     index_path = os.path.join(TEMPLATES_DIR, "index.html")
+    # If demo auth enabled, require valid cookie/token before serving dashboard
+    if AUTH_TOKEN:
+        try:
+            cookie_tok = request.cookies.get("auth_token")
+            qp_tok = request.query_params.get("token") if request.query_params else None
+            if (cookie_tok or qp_tok) != AUTH_TOKEN:
+                return RedirectResponse(url="/login", status_code=303)
+        except Exception:
+            return RedirectResponse(url="/login", status_code=303)
     if os.path.exists(index_path):
         headers = {
             "Cache-Control": "no-cache, no-store, must-revalidate",
@@ -797,6 +806,40 @@ def index():
         "Pragma": "no-cache",
         "Expires": "0",
     })
+
+
+@app.get("/login")
+def login_page():
+    path = os.path.join(TEMPLATES_DIR, "login.html")
+    if os.path.exists(path):
+        headers = {
+            "Cache-Control": "no-cache, no-store, must-revalidate",
+            "Pragma": "no-cache",
+            "Expires": "0",
+        }
+        return FileResponse(path, headers=headers)
+    return HTMLResponse("<h2>Login</h2><p>Missing template.</p>")
+
+
+@app.post("/auth/login")
+async def auth_login(request: Request, token: str = Form(...)):
+    if not AUTH_TOKEN:
+        # Auth disabled; accept any token and redirect
+        resp = RedirectResponse(url="/", status_code=303)
+        return resp
+    if token != AUTH_TOKEN:
+        return HTMLResponse("<h2>Unauthorized</h2><p>Invalid token.</p>", status_code=401)
+    resp = RedirectResponse(url="/", status_code=303)
+    # Set an HttpOnly cookie so API calls succeed without extra headers
+    resp.set_cookie("auth_token", token, httponly=True, samesite="lax")
+    return resp
+
+
+@app.post("/auth/logout")
+async def auth_logout():
+    resp = RedirectResponse(url="/login", status_code=303)
+    resp.delete_cookie("auth_token")
+    return resp
 
 
 @app.get("/api/status")
@@ -990,6 +1033,11 @@ async def websocket_endpoint(websocket: WebSocket):
         try:
             qp = websocket.query_params or {}
             token = qp.get("token")
+            if token != AUTH_TOKEN:
+                try:
+                    token = websocket.cookies.get("auth_token")
+                except Exception:
+                    token = None
             if token != AUTH_TOKEN:
                 await websocket.close(code=1008)
                 return
