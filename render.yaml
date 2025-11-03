@@ -1,7 +1,7 @@
 services:
   - type: web
     name: lucid-ddos
-    env: docker
+    runtime: docker
     plan: free
     autoDeploy: true
     healthCheckPath: /

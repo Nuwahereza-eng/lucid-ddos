@@ -29,7 +29,8 @@ from lucid_dataset_parser import process_live_traffic, parse_labels, dataset_to_
 
 class StartConfig(BaseModel):
     source: str  # network interface name or path to pcap file
-    model_path: str
+    # If omitted, the server will use env LUCID_MODEL_PATH or auto-discover a .h5 under ./output
+    model_path: Optional[str] = None
     dataset_type: Optional[str] = None  # DOS2017 | DOS2018 | DOS2019 | SYN2020 (optional for accuracy calc)
     attack_net: Optional[str] = None    # optional for accuracy calc on custom traffic
     victim_net: Optional[str] = None    # optional for accuracy calc on custom traffic
@@ -131,6 +132,31 @@ class DetectorService:
         # KPI configuration
         self._gt_override = None
         self._kpi_source = "none"  # dataset | http-labels | override | none
+
+    def _autodiscover_model_path(self) -> Optional[str]:
+        """Try to find a model .h5 if none provided, preferring ./output then repo root.
+        Returns absolute path or None if not found.
+        """
+        search_dirs = [
+            os.path.join(REPO_ROOT, "output"),
+            REPO_ROOT,
+        ]
+        candidates: List[str] = []
+        for d in search_dirs:
+            try:
+                for name in os.listdir(d):
+                    if name.lower().endswith(".h5"):
+                        candidates.append(os.path.join(d, name))
+            except Exception:
+                continue
+        if not candidates:
+            return None
+        # pick most recently modified
+        try:
+            best = max(candidates, key=lambda p: os.path.getmtime(p))
+            return best
+        except Exception:
+            return candidates[0]
 
     # Diagnostics helpers
     @staticmethod
@@ -267,8 +293,23 @@ class DetectorService:
         else:
             self._source_kind = "pcap" if str(cfg.source).endswith('.pcap') else "iface"
 
+        # Determine model path (explicit > env > auto-discover)
+        model_path_candidate: Optional[str] = None
+        if cfg.model_path and str(cfg.model_path).strip():
+            model_path_candidate = str(cfg.model_path).strip()
+        else:
+            env_path = os.environ.get("LUCID_MODEL_PATH")
+            if env_path and os.path.isfile(os.path.expanduser(env_path)):
+                model_path_candidate = env_path
+            else:
+                auto = self._autodiscover_model_path()
+                if auto:
+                    model_path_candidate = auto
+        if not model_path_candidate:
+            raise FileNotFoundError("Model path not provided and no .h5 found. Set env LUCID_MODEL_PATH or place a model under ./output.")
+
         # Load model and infer time window and flow len from filename convention: '<t>t-<n>n-*.h5'
-        resolved_model_path = self._resolve_model_path(cfg.model_path)
+        resolved_model_path = self._resolve_model_path(model_path_candidate)
         model_filename = os.path.basename(resolved_model_path)
         try:
             prefix = model_filename.split('n')[0] + 'n-'
@@ -717,8 +758,17 @@ async def on_startup():
 def index():
     index_path = os.path.join(TEMPLATES_DIR, "index.html")
     if os.path.exists(index_path):
-        return FileResponse(index_path)
-    return HTMLResponse("<h1>LUCID DDoS Dashboard</h1><p>UI not found.</p>")
+        headers = {
+            "Cache-Control": "no-cache, no-store, must-revalidate",
+            "Pragma": "no-cache",
+            "Expires": "0",
+        }
+        return FileResponse(index_path, headers=headers)
+    return HTMLResponse("<h1>LUCID DDoS Dashboard</h1><p>UI not found.</p>", headers={
+        "Cache-Control": "no-cache, no-store, must-revalidate",
+        "Pragma": "no-cache",
+        "Expires": "0",
+    })
 
 
 @app.get("/api/status")
@@ -741,6 +791,63 @@ def get_interfaces():
         lst = []
         ok = False
     return {"ok": ok, "interfaces": lst, "tshark": bool(service._tshark_path())}
+
+
+def _pcap_search_roots() -> List[str]:
+    roots = []
+    # sample-dataset under repo
+    sd = os.path.join(REPO_ROOT, "sample-dataset")
+    if os.path.isdir(sd):
+        roots.append(sd)
+    # repo root
+    roots.append(REPO_ROOT)
+    # optional env var for extra dirs (comma or colon separated)
+    extra = os.environ.get("LUCID_PCAP_DIRS")
+    if extra:
+        for part in extra.replace(";", ":").split(":"):
+            p = part.strip()
+            if p:
+                roots.append(os.path.expanduser(p))
+    # de-dup while preserving order
+    seen = set()
+    out = []
+    for r in roots:
+        rp = os.path.abspath(r)
+        if rp not in seen and os.path.isdir(rp):
+            seen.add(rp)
+            out.append(rp)
+    return out
+
+
+@app.get("/api/pcaps")
+def get_pcaps(limit: int = 200):
+    """List available .pcap files from known folders (sample-dataset, repo root, optional env dirs)."""
+    files: List[Dict[str, str]] = []
+    try:
+        roots = _pcap_search_roots()
+        for root in roots:
+            for dirpath, dirnames, filenames in os.walk(root):
+                # Skip hidden dirs to avoid scanning venv/.git, etc.
+                base = os.path.basename(dirpath)
+                if base.startswith('.') or base in ('.git', '.venv', 'venv', '__pycache__'):
+                    continue
+                for name in filenames:
+                    if name.lower().endswith('.pcap'):
+                        full = os.path.join(dirpath, name)
+                        try:
+                            rel = os.path.relpath(full, REPO_ROOT)
+                        except Exception:
+                            rel = full
+                        files.append({"path": rel, "name": name})
+                        if len(files) >= limit:
+                            raise StopIteration
+    except StopIteration:
+        pass
+    except Exception as e:
+        return {"ok": False, "files": [], "error": str(e)}
+    # sort by name for stable UX
+    files.sort(key=lambda x: x.get("name", ""))
+    return {"ok": True, "files": files}
 
 
 @app.post("/api/start")

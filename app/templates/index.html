@@ -4,7 +4,7 @@
     <header>
       <div class="container" style="display:flex; align-items:center; justify-content:space-between; gap:12px;">
         <div>
-          <h1>LUCID DDoS Detector <span class="chip" title="UI build version">UI v2025.10.30</span></h1>
+          <h1>LUCID DDoS Detector <span class="chip" title="UI build version">UI v2025.11.03</span></h1>
           <div id="status">Status: <span id="statusText">loading...</span> <span id="statusPill" class="status-pill">-</span></div>
         </div>
         <div>
@@ -61,7 +61,9 @@
         <label>Source (iface or .pcap):</label>
         <input id="source" placeholder="eth0 or /path/to/file.pcap" list="interfacesList" />
         <button id="scanIfacesBtn" class="secondary" title="Scan interfaces">Scan</button>
+        <button id="listPcapsBtn" class="secondary" title="List available PCAPs" style="display:none;">List PCAPs</button>
         <datalist id="interfacesList"></datalist>
+        <datalist id="pcapsList"></datalist>
       </div>
       <div class="form-row">
         <label>Model path (.h5):</label>
@@ -205,7 +207,9 @@
   const sourceKindEl = document.getElementById('sourceKind');
   const sourceEl = document.getElementById('source');
   const scanIfacesBtn = document.getElementById('scanIfacesBtn');
+  const listPcapsBtn = document.getElementById('listPcapsBtn');
   const interfacesList = document.getElementById('interfacesList');
+  const pcapsList = document.getElementById('pcapsList');
   const ingestHint = document.getElementById('ingestHint');
   const ingestTest = document.getElementById('ingestTest');
   const ingestJson = document.getElementById('ingestJson');
@@ -465,6 +469,33 @@
         };
       }
 
+      // List PCAP files available on server
+      if (listPcapsBtn) {
+        listPcapsBtn.onclick = async (e) => {
+          e.preventDefault();
+          try {
+            const res = await fetch('/api/pcaps');
+            const data = await res.json();
+            pcapsList.innerHTML = '';
+            if (!data.ok) {
+              alert('Failed to list PCAPs: ' + (data.error || 'unknown error'));
+              return;
+            }
+            (data.files || []).forEach(it => {
+              const opt = document.createElement('option');
+              opt.value = it.path;
+              opt.label = it.name || it.path;
+              pcapsList.appendChild(opt);
+            });
+            if (!data.files || data.files.length === 0) {
+              alert('No .pcap files found in sample-dataset/ or repo.');
+            }
+          } catch (e) {
+            alert('Failed to list PCAPs: ' + (e?.message || e));
+          }
+        };
+      }
+
       // Fixed and de-duplicated handlers are defined below
 
       document.getElementById('blockBtn').onclick = async () => {
@@ -565,19 +596,34 @@
         const kind = sourceKindEl ? sourceKindEl.value : 'iface';
         if (kind === 'iface') {
           sourceEl.placeholder = 'eth0';
+          sourceEl.setAttribute('list', 'interfacesList');
           if (ingestHint) ingestHint.style.display = 'none';
           if (ingestTest) ingestTest.style.display = 'none';
+          if (scanIfacesBtn) scanIfacesBtn.style.display = '';
+          if (listPcapsBtn) listPcapsBtn.style.display = 'none';
         } else if (kind === 'pcap') {
           sourceEl.placeholder = '/path/to/file.pcap';
+          sourceEl.setAttribute('list', 'pcapsList');
           if (ingestHint) ingestHint.style.display = 'none';
           if (ingestTest) ingestTest.style.display = 'none';
+          if (scanIfacesBtn) scanIfacesBtn.style.display = 'none';
+          if (listPcapsBtn) listPcapsBtn.style.display = '';
+          // Auto-fetch PCAP list on switch to pcap view for convenience
+          if (pcapsList && (!pcapsList.options || pcapsList.options.length === 0)) {
+            if (listPcapsBtn && typeof listPcapsBtn.onclick === 'function') {
+              listPcapsBtn.onclick(new Event('click'));
+            }
+          }
         } else {
           sourceEl.placeholder = '(optional) e.g., external';
+          sourceEl.removeAttribute('list');
           if (ingestHint) ingestHint.style.display = '';
           if (ingestTest) ingestTest.style.display = '';
+          if (scanIfacesBtn) scanIfacesBtn.style.display = 'none';
+          if (listPcapsBtn) listPcapsBtn.style.display = 'none';
         }
       }
-      if (sourceKindEl) sourceKindEl.addEventListener('change', updateSourceUI);
+  if (sourceKindEl) sourceKindEl.addEventListener('change', updateSourceUI);
       updateSourceUI();
 
       document.getElementById('savePolicyBtn').onclick = async () => {
