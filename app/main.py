@@ -105,40 +105,40 @@ class DetectorService:
         self._ewma_alpha = 0.5
         # reference to the asyncio event loop for cross-thread broadcasts
         self._async_loop: Optional[asyncio.AbstractEventLoop] = None
-        # external ingest buffer and source kind
-        self._ingest: Optional["queue.Queue"] = None
-        self._source_kind: str = "pcap"
+    # external ingest buffer and source kind
+    self._ingest: Optional["queue.Queue"] = None
+    self._source_kind: str = "pcap"
     # PCAP playback options
     self._pcap_path: Optional[str] = None
     self._pcap_realtime: bool = False
     self._pcap_loop: bool = False
-        # auto-mitigation settings
-        self._auto_block_limit = 20  # cap number of sources auto-blocked per window
-        self.hysteresis_windows = 2  # require N consecutive alert windows before acting
-        self.cooldown_seconds = 120  # do not re-act on same source within this window (seconds)
-        self.allowlist = set()       # sources that should never be blocked
-        self._consecutive_alerts = 0
-        # mitigation state per source: {ip: {stage, last_action, cooldown_until, pos_count}}
-        self._mitigation: Dict[str, Dict[str, Any]] = {}
+    # auto-mitigation settings
+    self._auto_block_limit = 20  # cap number of sources auto-blocked per window
+    self.hysteresis_windows = 2  # require N consecutive alert windows before acting
+    self.cooldown_seconds = 120  # do not re-act on same source within this window (seconds)
+    self.allowlist = set()       # sources that should never be blocked
+    self._consecutive_alerts = 0
+    # mitigation state per source: {ip: {stage, last_action, cooldown_until, pos_count}}
+    self._mitigation: Dict[str, Dict[str, Any]] = {}
 
-        # accuracy-at-scale metrics (optional if labels available)
-        self._tp = 0
-        self._fp = 0
-        self._tn = 0
-        self._fn = 0
-        self._attack_active = False
-        self._attack_start_ts: Optional[float] = None
-        self._first_alert_ts: Optional[float] = None
-        self._ttds: List[float] = []
-        # window-based indexing for robust TTD
-        self._window_index = 0
-        self._attack_start_window = None
+    # accuracy-at-scale metrics (optional if labels available)
+    self._tp = 0
+    self._fp = 0
+    self._tn = 0
+    self._fn = 0
+    self._attack_active = False
+    self._attack_start_ts: Optional[float] = None
+    self._first_alert_ts: Optional[float] = None
+    self._ttds: List[float] = []
+    # window-based indexing for robust TTD
+    self._window_index = 0
+    self._attack_start_window = None
 
-        # downtime prevention accounting
-        self._prevented_downtime_min = 0.0
-        # KPI configuration
-        self._gt_override = None
-        self._kpi_source = "none"  # dataset | http-labels | override | none
+    # downtime prevention accounting
+    self._prevented_downtime_min = 0.0
+    # KPI configuration
+    self._gt_override = None
+    self._kpi_source = "none"  # dataset | http-labels | override | none
 
     def _autodiscover_model_path(self) -> Optional[str]:
         """Try to find a model .h5 if none provided, preferring ./output then repo root.
