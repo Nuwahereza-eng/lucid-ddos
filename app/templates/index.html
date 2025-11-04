@@ -69,6 +69,17 @@
         <datalist id="interfacesList"></datalist>
         <datalist id="pcapsList"></datalist>
       </div>
+      <div class="form-row" id="pcapOptions" style="display:none; gap:16px; align-items:center;">
+        <label style="min-width:140px;">PCAP playback:</label>
+        <label style="display:flex; align-items:center; gap:6px;">
+          <input type="checkbox" id="pcapRealtime" checked />
+          <span>Real-time (sleep per window)</span>
+        </label>
+        <label style="display:flex; align-items:center; gap:6px;">
+          <input type="checkbox" id="pcapLoop" />
+          <span>Loop file when finished</span>
+        </label>
+      </div>
       <div class="form-row">
         <label>Model path (.h5):</label>
         <input id="model" placeholder="./output/10t-10n-DOS2019-LUCID.h5" />
@@ -223,6 +234,8 @@
   const ingestJson = document.getElementById('ingestJson');
   const ingestResult = document.getElementById('ingestResult');
   const demoTokenEl = document.getElementById('demoToken');
+  const pcapRealtimeEl = document.getElementById('pcapRealtime');
+  const pcapLoopEl = document.getElementById('pcapLoop');
   // Auth helpers
   const tokenKey = 'lucid-demo-token';
   try { const savedTok = localStorage.getItem(tokenKey); if (savedTok && demoTokenEl) demoTokenEl.value = savedTok; } catch {}
@@ -463,6 +476,10 @@
           source_kind: sourceKindEl.value,
           ground_truth_override: (document.getElementById('gtOverride').value || '') || null,
         };
+        if (sourceKindEl.value === 'pcap') {
+          if (pcapRealtimeEl) body.pcap_realtime = !!pcapRealtimeEl.checked;
+          if (pcapLoopEl) body.pcap_loop = !!pcapLoopEl.checked;
+        }
   const res = await fetch('/api/start', { method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders() }, body: JSON.stringify(body) });
         if (!res.ok) {
           let msg = '';
@@ -653,6 +670,7 @@
           if (ingestTest) ingestTest.style.display = 'none';
           if (scanIfacesBtn) scanIfacesBtn.style.display = '';
           if (listPcapsBtn) listPcapsBtn.style.display = 'none';
+          const pcapOpts = document.getElementById('pcapOptions'); if (pcapOpts) pcapOpts.style.display = 'none';
         } else if (kind === 'pcap') {
           sourceEl.placeholder = '/path/to/file.pcap';
           sourceEl.setAttribute('list', 'pcapsList');
@@ -660,6 +678,7 @@
           if (ingestTest) ingestTest.style.display = 'none';
           if (scanIfacesBtn) scanIfacesBtn.style.display = 'none';
           if (listPcapsBtn) listPcapsBtn.style.display = '';
+          const pcapOpts = document.getElementById('pcapOptions'); if (pcapOpts) pcapOpts.style.display = '';
           // Auto-fetch PCAP list on switch to pcap view for convenience
           if (pcapsList && (!pcapsList.options || pcapsList.options.length === 0)) {
             if (listPcapsBtn && typeof listPcapsBtn.onclick === 'function') {
@@ -673,6 +692,7 @@
           if (ingestTest) ingestTest.style.display = '';
           if (scanIfacesBtn) scanIfacesBtn.style.display = 'none';
           if (listPcapsBtn) listPcapsBtn.style.display = 'none';
+          const pcapOpts = document.getElementById('pcapOptions'); if (pcapOpts) pcapOpts.style.display = 'none';
         }
       }
   if (sourceKindEl) sourceKindEl.addEventListener('change', updateSourceUI);
