@@ -1,749 +1,767 @@
 <!doctype html>
 <html lang="en">
-  <body class="theme-light">
-    <header>
-      <div class="container" style="display:flex; align-items:center; justify-content:space-between; gap:12px;">
-        <div>
-          <h1>LUCID DDoS Detector <span class="chip" title="UI build version">UI v2025.11.03.1</span></h1>
-          <div id="status">Status: <span id="statusText">loading...</span> <span id="statusPill" class="status-pill">-</span></div>
-        </div>
-        <div style="display:flex; align-items:center; gap:8px;">
-          <div id="authBox" style="display:none; align-items:center; gap:8px;">
-            <span id="authStatus" class="muted">Logged in</span>
-            <button id="logoutBtn" class="secondary" title="Logout">Logout</button>
-          </div>
-          <button id="themeToggle" class="secondary" title="Toggle light/dark" aria-label="Toggle theme" style="font-size:18px; line-height:1;">
-            🌙
-          </button>
-        </div>
-      </div>
-      <div class="container"><div id="statusError" class="banner hidden" style="margin-top:8px;"></div></div>
+<head>
+    <meta charset="UTF-8">
     <meta http-equiv="Expires" content="0" />
     <title>LUCID DDoS Dashboard</title>
-    <section class="controls container card">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  </head>
-  <body>
-    <header>
     <style id="critical-css">
       /* Critical fallback styles in case external CSS fails to load */
-      body { margin:0; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Arial; background:#0b1220; color:#e5e7eb; }
+      body { margin: 0; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Arial; background: #f9fafb; color: #1f2937; }
       .container { max-width: 1200px; margin: 0 auto; padding: 16px; }
-      header { position: sticky; top:0; z-index:10; background:#0f172a; border-bottom:1px solid #1f2937; }
-      .card { background:#111827; border:1px solid #1f2937; border-radius:12px; padding:12px; }
-      .grid { display:grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap:16px; }
-      @media (max-width:900px){ .grid{ grid-template-columns:1fr; } }
-      .banner { background:#1f2937; border:1px solid #374151; border-left:6px solid #e11d48; border-radius:10px; padding:10px 12px; }
-      input,button { padding:8px 10px; border-radius:8px; border:1px solid #374151; background:#0f172a; color:#e5e7eb; }
-      button { background:#2563eb; border:0; }
+      header { position: sticky; top: 0; z-index: 10; background: #ffffff; border-bottom: 1px solid #e5e7eb; }
+      .card { background: #ffffff; border: 1px solid #e5e7eb; border-radius: 12px; padding: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+      .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; }
+      @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
+      .banner { background: #f3f4f6; border: 1px solid #d1d5db; border-left: 6px solid #ef4444; border-radius: 10px; padding: 12px; }
+      input, select, textarea { padding: 8px 12px; border-radius: 8px; border: 1px solid #d1d5db; background: #ffffff; color: #1f2937; }
+      button { padding: 8px 16px; border-radius: 8px; border: none; background: #3b82f6; color: #ffffff; cursor: pointer; }
+      button.secondary { background: #6b7280; }
+      .form-row { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+      .form-row label { min-width: 140px; font-weight: 500; }
+      .buttons { display: flex; gap: 12px; }
+      .chip { background: #e5e7eb; color: #4b5563; padding: 2px 8px; border-radius: 999px; font-size: 0.85em; }
+      .muted { color: #6b7280; }
+      .status-pill { padding: 2px 8px; border-radius: 999px; font-size: 0.85em; }
+      .badge { background: #e5e7eb; color: #4b5563; padding: 4px 12px; border-radius: 999px; margin-right: 4px; }
+      .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 4px; }
+      .theme-dark { background: #0b1220; color: #e5e7eb; }
+      .theme-dark .card { background: #111827; border-color: #1f2937; box-shadow: 0 1px 3px rgba(0,0,0,0.2); }
+      .theme-dark header { background: #0f172a; border-color: #1f2937; }
+      .theme-dark input, .theme-dark select, .theme-dark textarea { background: #1f2937; border-color: #374151; color: #e5e7eb; }
+      .theme-dark button { background: #2563eb; }
+      .theme-dark button.secondary { background: #4b5563; }
+      .theme-dark .chip, .theme-dark .badge { background: #1f2937; color: #cbd5e1; }
+      .theme-dark .banner { background: #1f2937; border-color: #374151; }
     </style>
-  <link rel="stylesheet" href="/static/styles.css?v=20251103-1" />
-  <link rel="stylesheet" href="static/styles.css?v=20251103-1" />
-      <div id="status">Status: <span id="statusText">loading...</span></div>
-      <div id="statusError" class="banner hidden" style="margin-top:8px;"></div>
-      <div id="kpis" style="margin-top:8px; font-size: 0.95em; color: #374151;">
-        <span>TPR: <strong id="kpiTPR">-</strong></span>
-        <span style="margin-left:12px;">FPR: <strong id="kpiFPR">-</strong></span>
-        <span style="margin-left:12px;">TTD (s): <strong id="kpiTTD">-</strong></span>
-        <span style="margin-left:12px;">Prevented downtime (min): <strong id="kpiPD">0</strong></span>
-        <span style="margin-left:12px;">Counts: <strong id="kpiCounts">TP=0 FP=0 TN=0 FN=0</strong></span>
-        <span style="margin-left:12px;">Source: <strong id="kpiSrc">-</strong></span>
-      </div>
+    <link rel="stylesheet" href="/static/styles.css?v=20251103-1" />
+</head>
+<body class="theme-light">
+    <header>
+        <div class="container" style="display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 16px;">
+            <div>
+                <h1 style="margin: 0; font-size: 1.5em; display: flex; align-items: center; gap: 8px;">
+                    LUCID DDoS Detector <span class="chip" title="UI build version">UI v2025.11.03.1</span>
+                </h1>
+                <div id="status" style="margin-top: 4px; font-size: 0.9em;">Status: <span id="statusText">loading...</span> <span id="statusPill" class="status-pill">-</span></div>
+            </div>
+            <div style="display: flex; align-items: center; gap: 12px;">
+                <div id="authBox" style="display: none; align-items: center; gap: 8px;">
+                    <span id="authStatus" class="muted">Logged in</span>
+                    <button id="logoutBtn" class="secondary" title="Logout">Logout</button>
+                </div>
+                <button id="themeToggle" class="secondary" title="Toggle light/dark" aria-label="Toggle theme" style="font-size: 18px; line-height: 1; padding: 8px;">
+                    🌙
+                </button>
+            </div>
+        </div>
+        <div class="container" style="padding: 0 16px 8px;">
+            <div id="statusError" class="banner hidden" style="margin-top: 0;"></div>
+            <div id="kpis" style="display: flex; flex-wrap: wrap; gap: 16px; font-size: 0.9em; color: #4b5563; margin-top: 8px;">
+                <span>TPR: <strong id="kpiTPR">-</strong></span>
+                <span>FPR: <strong id="kpiFPR">-</strong></span>
+                <span>TTD (s): <strong id="kpiTTD">-</strong></span>
+                <span>Prevented downtime (min): <strong id="kpiPD">0</strong></span>
+                <span>Counts: <strong id="kpiCounts">TP=0 FP=0 TN=0 FN=0</strong></span>
+                <span>Source: <strong id="kpiSrc">-</strong></span>
+            </div>
+        </div>
     </header>
 
-    <section class="controls">
-      <h2>Start Monitoring</h2>
-      <div class="form-row">
-        <label>Source type:</label>
-        <select id="sourceKind">
-          <option value="iface">Network interface</option>
-          <option value="pcap">PCAP file</option>
-          <option value="http">External HTTP ingest</option>
-        </select>
-      </div>
-      <div class="form-row">
-        <label>Source (iface or .pcap):</label>
-        <input id="source" placeholder="eth0 or /path/to/file.pcap" list="interfacesList" />
-        <button id="scanIfacesBtn" class="secondary" title="Scan interfaces">Scan</button>
-        <button id="listPcapsBtn" class="secondary" title="List available PCAPs" style="display:none;">List PCAPs</button>
-        <datalist id="interfacesList"></datalist>
-        <datalist id="pcapsList"></datalist>
-      </div>
-      <div class="form-row" id="pcapOptions" style="display:none; gap:16px; align-items:center;">
-        <label style="min-width:140px;">PCAP playback:</label>
-        <label style="display:flex; align-items:center; gap:6px;">
-          <input type="checkbox" id="pcapRealtime" checked />
-          <span>Real-time (sleep per window)</span>
-        </label>
-        <label style="display:flex; align-items:center; gap:6px;">
-          <input type="checkbox" id="pcapLoop" />
-          <span>Loop file when finished</span>
-        </label>
-      </div>
-      <div class="form-row">
-        <label>Model path (.h5):</label>
-        <input id="model" placeholder="./output/10t-10n-DOS2019-LUCID.h5" />
-      </div>
-      <div class="form-row">
-        <label>Dataset type (optional):</label>
-        <input id="datasetType" placeholder="DOS2019" />
-      </div>
-      <div class="form-row">
-        <label>Ground truth (KPIs):</label>
-        <select id="gtOverride">
-          <option value="">None (use dataset/labels)</option>
-          <option value="all_attack">Force: All attack</option>
-          <option value="all_benign">Force: All benign</option>
-        </select>
-      </div>
-      <div class="form-row">
-        <label>Attack net (optional):</label>
-        <input id="attackNet" placeholder="172.16.0.0/24" />
-      </div>
-      <div class="form-row">
-        <label>Victim net (optional):</label>
-        <input id="victimNet" placeholder="192.168.50.0/24" />
-      </div>
-      <div class="form-row">
-        <label>Alert threshold (0-1):</label>
-        <input type="number" step="0.01" id="threshold" value="0.5" />
-      </div>
-      <div class="form-row" id="demoTokenRow">
-        <label>Demo token (optional):</label>
-        <input id="demoToken" placeholder="Paste token for protected demo" />
-      </div>
-      <div class="buttons">
-        <button id="startBtn">Start</button>
-        <button id="stopBtn">Stop</button>
-      </div>
-      <div id="ingestHint" class="muted" style="margin-top:8px; display:none;">
-        External mode enabled. POST fragments to <code>/api/ingest</code> while running.
-      </div>
-      <div id="ingestTest" class="card" style="margin-top:12px; display:none;">
-        <div class="form-row">
-          <label>Manual ingest (JSON):</label>
-          <textarea id="ingestJson" rows="7" placeholder='{"fragments": [[[0.01,80,6,60],[0.02,80,6,52]]], "src_ips":["203.0.0.1"], "dest_ports":[80]}'></textarea>
-        </div>
-        <div class="buttons">
-          <button id="sendIngestBtn">Send JSON</button>
-          <button id="sendDemoBtn" class="secondary">Send demo fragments</button>
-          <span id="ingestResult" class="muted" style="margin-left:10px;"></span>
-        </div>
-      </div>
-    </section>
+    <main class="container" style="padding-top: 24px; display: grid; gap: 24px;">
+        <section class="controls card">
+            <h2 style="margin-top: 0; font-size: 1.25em;">Start Monitoring</h2>
+            <form style="display: grid; gap: 16px;">
+                <div class="form-row">
+                    <label>Source type:</label>
+                    <select id="sourceKind">
+                        <option value="iface">Network interface</option>
+                        <option value="pcap">PCAP file</option>
+                        <option value="http">External HTTP ingest</option>
+                    </select>
+                </div>
+                <div class="form-row">
+                    <label>Source (iface or .pcap):</label>
+                    <input id="source" placeholder="eth0 or /path/to/file.pcap" list="interfacesList" style="flex: 1;" />
+                    <button id="scanIfacesBtn" class="secondary" title="Scan interfaces">Scan</button>
+                    <button id="listPcapsBtn" class="secondary" title="List available PCAPs" style="display: none;">List PCAPs</button>
+                    <datalist id="interfacesList"></datalist>
+                    <datalist id="pcapsList"></datalist>
+                </div>
+                <div class="form-row" id="pcapOptions" style="display: none;">
+                    <label>PCAP playback:</label>
+                    <label style="display: flex; align-items: center; gap: 6px;">
+                        <input type="checkbox" id="pcapRealtime" checked />
+                        Real-time (sleep per window)
+                    </label>
+                    <label style="display: flex; align-items: center; gap: 6px;">
+                        <input type="checkbox" id="pcapLoop" />
+                        Loop file when finished
+                    </label>
+                </div>
+                <div class="form-row">
+                    <label>Model path (.h5):</label>
+                    <input id="model" placeholder="./output/10t-10n-DOS2019-LUCID.h5" style="flex: 1;" />
+                </div>
+                <div class="form-row">
+                    <label>Dataset type (optional):</label>
+                    <input id="datasetType" placeholder="DOS2019" style="flex: 1;" />
+                </div>
+                <div class="form-row">
+                    <label>Ground truth (KPIs):</label>
+                    <select id="gtOverride" style="flex: 1;">
+                        <option value="">None (use dataset/labels)</option>
+                        <option value="all_attack">Force: All attack</option>
+                        <option value="all_benign">Force: All benign</option>
+                    </select>
+                </div>
+                <div class="form-row">
+                    <label>Attack net (optional):</label>
+                    <input id="attackNet" placeholder="172.16.0.0/24" style="flex: 1;" />
+                </div>
+                <div class="form-row">
+                    <label>Victim net (optional):</label>
+                    <input id="victimNet" placeholder="192.168.50.0/24" style="flex: 1;" />
+                </div>
+                <div class="form-row">
+                    <label>Alert threshold (0-1):</label>
+                    <input type="number" step="0.01" id="threshold" value="0.5" style="width: 100px;" />
+                </div>
+                <div class="form-row" id="demoTokenRow">
+                    <label>Demo token (optional):</label>
+                    <input id="demoToken" placeholder="Paste token for protected demo" style="flex: 1;" />
+                </div>
+                <div class="buttons">
+                    <button id="startBtn" type="button">Start</button>
+                    <button id="stopBtn" type="button" class="secondary">Stop</button>
+                </div>
+            </form>
+            <div id="ingestHint" class="muted" style="margin-top: 8px; display: none;">
+                External mode enabled. POST fragments to <code>/api/ingest</code> while running.
+            </div>
+            <div id="ingestTest" class="card" style="margin-top: 16px; display: none; padding: 12px;">
+                <div class="form-row" style="flex-direction: column; align-items: flex-start;">
+                    <label>Manual ingest (JSON):</label>
+                    <textarea id="ingestJson" rows="7" placeholder='{"fragments": [[[0.01,80,6,60],[0.02,80,6,52]]], "src_ips":["203.0.0.1"], "dest_ports":[80]}' style="width: 100%;"></textarea>
+                </div>
+                <div class="buttons" style="margin-top: 8px;">
+                    <button id="sendIngestBtn">Send JSON</button>
+                    <button id="sendDemoBtn" class="secondary">Send demo fragments</button>
+                    <span id="ingestResult" class="muted" style="margin-left: 12px;"></span>
+                </div>
+            </div>
+        </section>
 
-  <section class="charts container card">
-      <h2 style="display:flex; align-items:center; gap:8px;">Metrics <span class="chip" title="Alert threshold for DDoS Fraction">threshold: <span id="thresholdBadge">0.50</span></span></h2>
-      <details class="help">
-        <summary>What these metrics mean</summary>
-        <ul>
-          <li><strong>DDoS Fraction</strong>: Share of flow samples classified as DDoS in this window. Above the threshold triggers an alert.</li>
-          <li><strong>Forecast (next)</strong>: Short‑term prediction for the next window’s DDoS Fraction.</li>
-          <li><strong>Flow Density</strong>: Number of active flows. Spikes may indicate floods.</li>
-          <li><strong>Unique Destination Ports</strong>: Spread of target ports. High spread suggests port sweeps.</li>
-          <li><strong>Source IP Diversity</strong>: Number of unique source IPs. High diversity is typical of distributed attacks.</li>
-        </ul>
-      </details>
-      <div class="grid">
-        <div>
-          <div class="chart-title">DDoS Fraction <span class="info" title="Fraction of samples flagged as DDoS in this window.">i</span></div>
-          <canvas id="ddosChart"></canvas>
-        </div>
-        <div>
-          <div class="chart-title">Flow Density <span class="info" title="Number of active flows seen in this window.">i</span></div>
-          <canvas id="flowChart"></canvas>
-        </div>
-        <div>
-          <div class="chart-title">Unique Destination Ports <span class="info" title="How many distinct destination ports were hit.">i</span></div>
-          <canvas id="portsChart"></canvas>
-        </div>
-        <div>
-          <div class="chart-title">Source IP Diversity <span class="info" title="How many distinct source IPs were seen.">i</span></div>
-          <canvas id="srcChart"></canvas>
-        </div>
-      </div>
-    </section>
+        <section class="charts card">
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px;">
+                <h2 style="margin: 0; font-size: 1.25em;">Metrics</h2>
+                <span class="chip" title="Alert threshold for DDoS Fraction">threshold: <span id="thresholdBadge">0.50</span></span>
+            </div>
+            <details class="help" style="margin-bottom: 16px; font-size: 0.9em;">
+                <summary style="cursor: pointer; font-weight: 500;">What these metrics mean</summary>
+                <ul style="padding-left: 20px; margin-top: 8px;">
+                    <li><strong>DDoS Fraction</strong>: Share of flow samples classified as DDoS in this window. Above the threshold triggers an alert.</li>
+                    <li><strong>Forecast (next)</strong>: Short-term prediction for the next window’s DDoS Fraction.</li>
+                    <li><strong>Flow Density</strong>: Number of active flows. Spikes may indicate floods.</li>
+                    <li><strong>Unique Destination Ports</strong>: Spread of target ports. High spread suggests port sweeps.</li>
+                    <li><strong>Source IP Diversity</strong>: Number of unique source IPs. High diversity is typical of distributed attacks.</li>
+                </ul>
+            </details>
+            <div class="grid">
+                <div>
+                    <div class="chart-title" style="font-weight: 500; margin-bottom: 8px;">DDoS Fraction <span class="info muted" title="Fraction of samples flagged as DDoS in this window." style="cursor: help;">i</span></div>
+                    <canvas id="ddosChart"></canvas>
+                </div>
+                <div>
+                    <div class="chart-title" style="font-weight: 500; margin-bottom: 8px;">Flow Density <span class="info muted" title="Number of active flows seen in this window." style="cursor: help;">i</span></div>
+                    <canvas id="flowChart"></canvas>
+                </div>
+                <div>
+                    <div class="chart-title" style="font-weight: 500; margin-bottom: 8px;">Unique Destination Ports <span class="info muted" title="How many distinct destination ports were hit." style="cursor: help;">i</span></div>
+                    <canvas id="portsChart"></canvas>
+                </div>
+                <div>
+                    <div class="chart-title" style="font-weight: 500; margin-bottom: 8px;">Source IP Diversity <span class="info muted" title="How many distinct source IPs were seen." style="cursor: help;">i</span></div>
+                    <canvas id="srcChart"></canvas>
+                </div>
+            </div>
+        </section>
 
-    <section class="alerts container card">
-      <h2>Alerts</h2>
-      <div id="alertBanner" class="banner hidden pulse">ALERT: Potential DDoS detected</div>
-      <ul id="alertList"></ul>
-    </section>
+        <section class="alerts card">
+            <h2 style="margin-top: 0; font-size: 1.25em;">Alerts</h2>
+            <div id="alertBanner" class="banner hidden" style="margin-bottom: 16px; animation: pulse 2s infinite;">ALERT: Potential DDoS detected</div>
+            <ul id="alertList" style="list-style: none; padding: 0; margin: 0; font-size: 0.9em;"></ul>
+        </section>
 
-    <section class="mitigation container card">
-      <h2>Mitigation</h2>
-      <div class="form-row">
-        <label>Block sources (comma-separated):</label>
-        <input id="blockSources" placeholder="1.2.3.4, 5.6.7.8" />
-        <button id="blockBtn">Block</button>
-      </div>
-      <div class="form-row">
-        <label>Unblock sources (comma-separated):</label>
-        <input id="unblockSources" placeholder="1.2.3.4, 5.6.7.8" />
-        <button id="unblockBtn">Unblock</button>
-      </div>
-      <div class="form-row">
-        <label>Allowlist (comma-separated):</label>
-        <input id="allowlistInput" placeholder="10.0.0.1, 10.0.0.2" />
-        <button id="allowAddBtn">Add</button>
-        <button id="allowRemoveBtn">Remove</button>
-      </div>
-      <div class="form-row">
-        <label>Hysteresis (consecutive alerts):</label>
-        <input type="number" id="hysteresisInput" value="2" style="width:80px;" />
-        <label style="margin-left:12px;">Cooldown (sec):</label>
-        <input type="number" id="cooldownInput" value="120" style="width:100px;" />
-        <button id="savePolicyBtn">Save Policy</button>
-      </div>
-      <div class="form-row">
-        <strong>Currently blocked:</strong>
-        <span id="blockedList" class="badges">(none)</span>
-      </div>
-    </section>
+        <section class="mitigation card">
+            <h2 style="margin-top: 0; font-size: 1.25em;">Mitigation</h2>
+            <form style="display: grid; gap: 16px;">
+                <div class="form-row">
+                    <label>Block sources (comma-separated):</label>
+                    <input id="blockSources" placeholder="1.2.3.4, 5.6.7.8" style="flex: 1;" />
+                    <button id="blockBtn" type="button">Block</button>
+                </div>
+                <div class="form-row">
+                    <label>Unblock sources (comma-separated):</label>
+                    <input id="unblockSources" placeholder="1.2.3.4, 5.6.7.8" style="flex: 1;" />
+                    <button id="unblockBtn" type="button">Unblock</button>
+                </div>
+                <div class="form-row">
+                    <label>Allowlist (comma-separated):</label>
+                    <input id="allowlistInput" placeholder="10.0.0.1, 10.0.0.2" style="flex: 1;" />
+                    <button id="allowAddBtn" type="button">Add</button>
+                    <button id="allowRemoveBtn" type="button" class="secondary">Remove</button>
+                </div>
+                <div class="form-row">
+                    <label>Hysteresis (consecutive alerts):</label>
+                    <input type="number" id="hysteresisInput" value="2" style="width: 80px;" />
+                    <label style="margin-left: 16px;">Cooldown (sec):</label>
+                    <input type="number" id="cooldownInput" value="120" style="width: 100px;" />
+                    <button id="savePolicyBtn" type="button" style="margin-left: 16px;">Save Policy</button>
+                </div>
+                <div class="form-row" style="align-items: flex-start;">
+                    <label>Currently blocked:</label>
+                    <span id="blockedList" class="badges" style="flex: 1; display: flex; flex-wrap: wrap; gap: 4px;">(none)</span>
+                </div>
+            </form>
+        </section>
+    </main>
 
     <script>
-  console.log('LUCID UI version: 2025-11-03.1');
+        console.log('LUCID UI version: 2025-11-03.1');
         // Remove critical CSS after main stylesheet loads
         window.addEventListener('load', () => {
-          const sheets = Array.from(document.styleSheets);
-          const hasMain = sheets.some(s => (s.href||'').includes('styles.css'));
-          if (hasMain) {
-            const el = document.getElementById('critical-css');
-            if (el) el.remove();
-          }
-        });
-  const statusEl = document.getElementById('statusText');
-  const statusPill = document.getElementById('statusPill');
-      const alertBanner = document.getElementById('alertBanner');
-      const alertList = document.getElementById('alertList');
-      const blockedList = document.getElementById('blockedList');
-  const kpiTPR = document.getElementById('kpiTPR');
-  const kpiFPR = document.getElementById('kpiFPR');
-  const kpiTTD = document.getElementById('kpiTTD');
-  const kpiPD = document.getElementById('kpiPD');
-  const kpiCounts = document.getElementById('kpiCounts');
-  const kpiSrc = document.getElementById('kpiSrc');
-  const sourceKindEl = document.getElementById('sourceKind');
-  const sourceEl = document.getElementById('source');
-  const scanIfacesBtn = document.getElementById('scanIfacesBtn');
-  const listPcapsBtn = document.getElementById('listPcapsBtn');
-  const interfacesList = document.getElementById('interfacesList');
-  const pcapsList = document.getElementById('pcapsList');
-  const ingestHint = document.getElementById('ingestHint');
-  const ingestTest = document.getElementById('ingestTest');
-  const ingestJson = document.getElementById('ingestJson');
-  const ingestResult = document.getElementById('ingestResult');
-  const demoTokenEl = document.getElementById('demoToken');
-  const pcapRealtimeEl = document.getElementById('pcapRealtime');
-  const pcapLoopEl = document.getElementById('pcapLoop');
-  // Auth helpers
-  const tokenKey = 'lucid-demo-token';
-  try { const savedTok = localStorage.getItem(tokenKey); if (savedTok && demoTokenEl) demoTokenEl.value = savedTok; } catch {}
-  let isCookieAuth = false;
-  function getAuthToken() { return (demoTokenEl && demoTokenEl.value.trim()) || ''; }
-  function authHeaders() {
-    // If cookie-based auth is active, no need to add Authorization header
-    if (isCookieAuth) return {};
-    const t = getAuthToken();
-    return t ? { 'Authorization': 'Bearer ' + t } : {};
-  }
-  if (demoTokenEl) { demoTokenEl.addEventListener('change', () => { try { localStorage.setItem(tokenKey, demoTokenEl.value.trim()); } catch {} }); }
-  async function detectAuthState() {
-    const demoRow = document.getElementById('demoTokenRow');
-    const authBox = document.getElementById('authBox');
-    try {
-      const res = await fetch('/api/status', { method: 'GET' });
-      if (res.ok) {
-        isCookieAuth = true;
-        if (demoRow) demoRow.style.display = 'none';
-        if (authBox) authBox.style.display = 'flex';
-      } else {
-        isCookieAuth = false;
-        if (demoRow) demoRow.style.display = '';
-        if (authBox) authBox.style.display = 'none';
-      }
-    } catch (e) {
-      isCookieAuth = false;
-      if (demoRow) demoRow.style.display = '';
-      if (authBox) authBox.style.display = 'none';
-    }
-  }
-  detectAuthState();
-  const logoutBtn = document.getElementById('logoutBtn');
-  if (logoutBtn) {
-    logoutBtn.onclick = async () => {
-      try {
-        await fetch('/auth/logout', { method: 'POST' });
-      } catch {}
-      window.location.href = '/login';
-    };
-  }
-  
-
-      async function refreshStatus() {
-        try {
-          const res = await fetch('/api/status', { headers: { ...authHeaders() } });
-          const data = await res.json();
-          const st = data.status || 'unknown';
-          statusEl.textContent = st;
-          statusPill.textContent = st;
-          statusPill.className = 'status-pill ' + st;
-          const errEl = document.getElementById('statusError');
-          if (data.last_error) {
-            errEl.textContent = `Last error: ${data.last_error}`;
-            errEl.classList.remove('hidden');
-          } else {
-            errEl.textContent = '';
-            errEl.classList.add('hidden');
-          }
-          // KPIs
-          if (data.accuracy) {
-            kpiTPR.textContent = data.accuracy.TPR != null ? data.accuracy.TPR.toFixed(2) : '-';
-            kpiFPR.textContent = data.accuracy.FPR != null ? data.accuracy.FPR.toFixed(2) : '-';
-            kpiTTD.textContent = data.accuracy.TTD_sec != null ? data.accuracy.TTD_sec.toFixed(2) : '-';
-          }
-          if (typeof data.prevented_downtime_min === 'number') {
-            kpiPD.textContent = data.prevented_downtime_min.toFixed(2);
-          }
-          if (data.kpi_counts) {
-            const {TP=0,FP=0,TN=0,FN=0} = data.kpi_counts;
-            kpiCounts.textContent = `TP=${TP} FP=${FP} TN=${TN} FN=${FN}`;
-          }
-          if (data.kpi_source) {
-            kpiSrc.textContent = data.kpi_source;
-          }
-
-          // Blocked list: prefer mitigation with stages
-          if (Array.isArray(data.mitigation) && data.mitigation.length) {
-            blockedList.innerHTML = data.mitigation.map(m => `<span class="badge"><span class="dot ${m.stage}"></span>${m.ip} (${m.stage})</span>`).join(' ');
-          } else if (data.blocked_sources && data.blocked_sources.length) {
-            blockedList.innerHTML = data.blocked_sources.map(ip => `<span class="badge"><span class="dot monitor"></span>${ip}</span>`).join(' ');
-          } else {
-            blockedList.textContent = '(none)';
-          }
-        } catch (e) {
-          statusEl.textContent = 'error';
-        }
-      }
-
-      refreshStatus();
-      setInterval(refreshStatus, 3000);
-
-      // Charts
-  const ddosCtx = document.getElementById('ddosChart').getContext('2d');
-      const flowCtx = document.getElementById('flowChart').getContext('2d');
-      const portsCtx = document.getElementById('portsChart').getContext('2d');
-      const srcCtx = document.getElementById('srcChart').getContext('2d');
-
-      const timeFmt = (ts) => new Date(ts * 1000).toLocaleTimeString();
-  const fmtPct = (x) => typeof x === 'number' ? x.toFixed(3) : '-';
-  const fmtNum = (x) => typeof x === 'number' ? x.toLocaleString() : '-';
-
-      function makeChart(ctx, label, color, yMin = 0, yMax = undefined) {
-        return new Chart(ctx, {
-          type: 'line',
-          data: { labels: [], datasets: [{ label, data: [], borderColor: color, tension: 0.2, pointRadius: 0 }]},
-          options: {
-            responsive: true,
-            scales: { y: { min: yMin, max: yMax } },
-            animation: false,
-          },
-        });
-      }
-
-      // Threshold line plugin
-      const thresholdPlugin = {
-        id: 'thresholdLine',
-        afterDraw(chart, args, opts) {
-          const value = opts && typeof opts.value === 'number' ? opts.value : null;
-          if (value == null) return;
-          const {ctx, chartArea, scales: {y}} = chart;
-          const yPix = y.getPixelForValue(value);
-          ctx.save();
-          ctx.strokeStyle = (opts && opts.color) || '#ef4444';
-          ctx.setLineDash([6,4]);
-          ctx.beginPath();
-          ctx.moveTo(chartArea.left, yPix);
-          ctx.lineTo(chartArea.right, yPix);
-          ctx.stroke();
-          ctx.restore();
-        }
-      };
-
-      const ddosChart = new Chart(ddosCtx, {
-        type: 'line',
-        data: {
-          labels: [],
-          datasets: [
-            { label: 'DDoS Fraction', data: [], borderColor: '#e11d48', backgroundColor: 'rgba(225,29,72,0.08)', tension: 0.2, pointRadius: 0 },
-            { label: 'Uncertainty High', data: [], borderColor: 'transparent', pointRadius: 0 },
-            { label: 'Uncertainty Low', data: [], borderColor: 'transparent', backgroundColor: 'rgba(255,99,132,0.12)', fill: '-1', pointRadius: 0 },
-            { label: 'Forecast (next)', data: [], borderColor: '#f59e0b', borderDash: [6,4], tension: 0.2, pointRadius: 0 },
-            { label: 'Alerts', data: [], type: 'line', borderColor: 'transparent', pointBackgroundColor: '#ef4444', pointRadius: 3, showLine: false },
-          ]
-        },
-        options: {
-          responsive: true,
-          plugins: { thresholdLine: { value: 0.5, color: '#ef4444' }, legend: { labels: { filter: (item) => item.text !== 'Alerts' } } },
-          scales: { y: { min: 0, max: 1 } },
-          animation: false,
-        },
-        plugins: [thresholdPlugin],
-      });
-      const flowChart = makeChart(flowCtx, 'Flow Density', '#2563eb');
-      const portsChart = makeChart(portsCtx, 'Unique Dest Ports', '#16a34a');
-      const srcChart = makeChart(srcCtx, 'Src IP Diversity', '#7c3aed');
-
-      function pushChartPoint(chart, ts, vals, maxPoints = 200) {
-        // vals can be single value or array per dataset index
-        chart.data.labels.push(timeFmt(ts));
-        const arr = Array.isArray(vals) ? vals : [vals];
-        arr.forEach((v, idx) => {
-          if (!chart.data.datasets[idx]) return;
-          chart.data.datasets[idx].data.push(v);
-        });
-        if (chart.data.labels.length > maxPoints) {
-          chart.data.labels.shift();
-          chart.data.datasets.forEach(ds => ds.data.shift());
-        }
-        chart.update();
-      }
-
-      // WebSocket stream
-  const wsProto = location.protocol === 'https:' ? 'wss' : 'ws';
-  const wsToken = encodeURIComponent(getAuthToken() || '');
-  const ws = new WebSocket(`${wsProto}://${location.host}/ws${wsToken ? ('?token=' + wsToken) : ''}`);
-      ws.onmessage = (evt) => {
-        try {
-          const m = JSON.parse(evt.data);
-          const next = m.forecast?.ddos_fraction_next ?? null;
-          const confHi = m.forecast?.confidence_high ?? null;
-          const confLo = m.forecast?.confidence_low ?? null;
-          const alertVal = (m.alert ? m.ddos_fraction : NaN);
-          pushChartPoint(ddosChart, m.ts, [m.ddos_fraction, confHi, confLo, next, alertVal]);
-          pushChartPoint(flowChart, m.ts, m.metrics.flow_density);
-          pushChartPoint(portsChart, m.ts, m.metrics.unique_dest_ports);
-          pushChartPoint(srcChart, m.ts, m.metrics.src_ip_diversity);
-
-          if (m.alert || m.forecast?.predicted_alert) {
-            alertBanner.classList.remove('hidden');
-            const item = document.createElement('li');
-            const pred = m.forecast?.predicted_alert && !m.alert ? ' (predicted next window)' : '';
-            let autoTxt = '';
-            if (Array.isArray(m.auto_blocked) && m.auto_blocked.length) {
-              const ab = m.auto_blocked.map(x => typeof x === 'string' ? x : `${x.ip} (${x.stage||'blocked'})`).join(', ');
-              autoTxt = ` | auto-blocked: ${ab}`;
+            const sheets = Array.from(document.styleSheets);
+            const hasMain = sheets.some(s => (s.href || '').includes('styles.css'));
+            if (hasMain) {
+                const el = document.getElementById('critical-css');
+                if (el) el.remove();
             }
-            item.textContent = `${timeFmt(m.ts)} ALERT${pred} — ddos_fraction=${fmtPct(m.ddos_fraction)} (threshold ${fmtPct(m.threshold)})${autoTxt}`;
-            alertList.prepend(item);
-          } else {
-            alertBanner.classList.add('hidden');
-          }
-
-          // Update currently blocked list immediately if present in payload
-          if (Array.isArray(m.mitigation) && m.mitigation.length) {
-            blockedList.innerHTML = m.mitigation.map(x => `<span class="badge"><span class="dot ${x.stage}"></span>${x.ip} (${x.stage})</span>`).join(' ');
-          } else if (Array.isArray(m.blocked_sources)) {
-            blockedList.innerHTML = m.blocked_sources.length ? m.blocked_sources.map(ip => `<span class="badge"><span class=\"dot monitor\"></span>${ip}</span>`).join(' ') : '(none)';
-          }
-
-          // (Explainability panel removed per request)
-          // Update hysteresis/cooldown default UI if present
-          if (m.threshold != null) {
-            // keep displayed threshold input in sync if user hasn't changed it
-          }
-
-          // Update threshold badge and line on chart
-          if (typeof m.threshold === 'number') {
-            const thr = m.threshold;
-            document.getElementById('thresholdBadge').textContent = thr.toFixed(2);
-            ddosChart.options.plugins.thresholdLine.value = thr;
-          }
-        } catch (e) {
-          console.error('Bad WS message', e);
+        });
+        const statusEl = document.getElementById('statusText');
+        const statusPill = document.getElementById('statusPill');
+        const alertBanner = document.getElementById('alertBanner');
+        const alertList = document.getElementById('alertList');
+        const blockedList = document.getElementById('blockedList');
+        const kpiTPR = document.getElementById('kpiTPR');
+        const kpiFPR = document.getElementById('kpiFPR');
+        const kpiTTD = document.getElementById('kpiTTD');
+        const kpiPD = document.getElementById('kpiPD');
+        const kpiCounts = document.getElementById('kpiCounts');
+        const kpiSrc = document.getElementById('kpiSrc');
+        const sourceKindEl = document.getElementById('sourceKind');
+        const sourceEl = document.getElementById('source');
+        const scanIfacesBtn = document.getElementById('scanIfacesBtn');
+        const listPcapsBtn = document.getElementById('listPcapsBtn');
+        const interfacesList = document.getElementById('interfacesList');
+        const pcapsList = document.getElementById('pcapsList');
+        const ingestHint = document.getElementById('ingestHint');
+        const ingestTest = document.getElementById('ingestTest');
+        const ingestJson = document.getElementById('ingestJson');
+        const ingestResult = document.getElementById('ingestResult');
+        const demoTokenEl = document.getElementById('demoToken');
+        const pcapRealtimeEl = document.getElementById('pcapRealtime');
+        const pcapLoopEl = document.getElementById('pcapLoop');
+        // Auth helpers
+        const tokenKey = 'lucid-demo-token';
+        try { const savedTok = localStorage.getItem(tokenKey); if (savedTok && demoTokenEl) demoTokenEl.value = savedTok; } catch {}
+        let isCookieAuth = false;
+        function getAuthToken() { return (demoTokenEl && demoTokenEl.value.trim()) || ''; }
+        function authHeaders() {
+            // If cookie-based auth is active, no need to add Authorization header
+            if (isCookieAuth) return {};
+            const t = getAuthToken();
+            return t ? { 'Authorization': 'Bearer ' + t } : {};
         }
-      };
+        if (demoTokenEl) { demoTokenEl.addEventListener('change', () => { try { localStorage.setItem(tokenKey, demoTokenEl.value.trim()); } catch {} }); }
+        async function detectAuthState() {
+            const demoRow = document.getElementById('demoTokenRow');
+            const authBox = document.getElementById('authBox');
+            try {
+                const res = await fetch('/api/status', { method: 'GET' });
+                if (res.ok) {
+                    isCookieAuth = true;
+                    if (demoRow) demoRow.style.display = 'none';
+                    if (authBox) authBox.style.display = 'flex';
+                } else {
+                    isCookieAuth = false;
+                    if (demoRow) demoRow.style.display = '';
+                    if (authBox) authBox.style.display = 'none';
+                }
+            } catch (e) {
+                isCookieAuth = false;
+                if (demoRow) demoRow.style.display = '';
+                if (authBox) authBox.style.display = 'none';
+            }
+        }
+        detectAuthState();
+        const logoutBtn = document.getElementById('logoutBtn');
+        if (logoutBtn) {
+            logoutBtn.onclick = async () => {
+                try {
+                    await fetch('/auth/logout', { method: 'POST' });
+                } catch {}
+                window.location.href = '/login';
+            };
+        }
 
-      // Controls
-      document.getElementById('startBtn').onclick = async () => {
-        const body = {
-          source: sourceEl.value.trim() || (sourceKindEl.value === 'http' ? 'external' : ''),
-          model_path: document.getElementById('model').value.trim(),
-          dataset_type: (document.getElementById('datasetType').value || '').trim() || null,
-          attack_net: (document.getElementById('attackNet').value || '').trim() || null,
-          victim_net: (document.getElementById('victimNet').value || '').trim() || null,
-          threshold: parseFloat(document.getElementById('threshold').value || '0.5'),
-          source_kind: sourceKindEl.value,
-          ground_truth_override: (document.getElementById('gtOverride').value || '') || null,
-        };
-        if (sourceKindEl.value === 'pcap') {
-          if (pcapRealtimeEl) body.pcap_realtime = !!pcapRealtimeEl.checked;
-          if (pcapLoopEl) body.pcap_loop = !!pcapLoopEl.checked;
+        async function refreshStatus() {
+            try {
+                const res = await fetch('/api/status', { headers: { ...authHeaders() } });
+                const data = await res.json();
+                const st = data.status || 'unknown';
+                statusEl.textContent = st;
+                statusPill.textContent = st;
+                statusPill.className = 'status-pill ' + st;
+                const errEl = document.getElementById('statusError');
+                if (data.last_error) {
+                    errEl.textContent = `Last error: ${data.last_error}`;
+                    errEl.classList.remove('hidden');
+                } else {
+                    errEl.textContent = '';
+                    errEl.classList.add('hidden');
+                }
+                // KPIs
+                if (data.accuracy) {
+                    kpiTPR.textContent = data.accuracy.TPR != null ? data.accuracy.TPR.toFixed(2) : '-';
+                    kpiFPR.textContent = data.accuracy.FPR != null ? data.accuracy.FPR.toFixed(2) : '-';
+                    kpiTTD.textContent = data.accuracy.TTD_sec != null ? data.accuracy.TTD_sec.toFixed(2) : '-';
+                }
+                if (typeof data.prevented_downtime_min === 'number') {
+                    kpiPD.textContent = data.prevented_downtime_min.toFixed(2);
+                }
+                if (data.kpi_counts) {
+                    const {TP=0,FP=0,TN=0,FN=0} = data.kpi_counts;
+                    kpiCounts.textContent = `TP=${TP} FP=${FP} TN=${TN} FN=${FN}`;
+                }
+                if (data.kpi_source) {
+                    kpiSrc.textContent = data.kpi_source;
+                }
+
+                // Blocked list: prefer mitigation with stages
+                if (Array.isArray(data.mitigation) && data.mitigation.length) {
+                    blockedList.innerHTML = data.mitigation.map(m => `<span class="badge"><span class="dot ${m.stage}"></span>${m.ip} (${m.stage})</span>`).join(' ');
+                } else if (data.blocked_sources && data.blocked_sources.length) {
+                    blockedList.innerHTML = data.blocked_sources.map(ip => `<span class="badge"><span class="dot monitor"></span>${ip}</span>`).join(' ');
+                } else {
+                    blockedList.textContent = '(none)';
+                }
+            } catch (e) {
+                statusEl.textContent = 'error';
+            }
         }
-  const res = await fetch('/api/start', { method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders() }, body: JSON.stringify(body) });
-        if (!res.ok) {
-          let msg = '';
-          try {
-            const data = await res.json();
-            msg = data.detail || JSON.stringify(data);
-          } catch (e) {
-            msg = await res.text();
-          }
-          alert(`Start failed (${res.status}): ${msg}`);
-          return;
-        }
+
         refreshStatus();
-      };
+        setInterval(refreshStatus, 3000);
 
-      // Stop handler: POST /api/stop and refresh status
-      document.getElementById('stopBtn').onclick = async () => {
-        try {
-          const res = await fetch('/api/stop', { method: 'POST', headers: { ...authHeaders() } });
-          if (!res.ok) {
-            let msg = '';
-            try { const data = await res.json(); msg = data.detail || JSON.stringify(data); } catch (e) { msg = await res.text(); }
-            alert(`Stop failed (${res.status}): ${msg}`);
-          }
-        } catch (e) {
-          console.error('Stop error', e);
-        } finally {
-          setTimeout(refreshStatus, 200);
-        }
-      };
+        // Charts
+        const ddosCtx = document.getElementById('ddosChart').getContext('2d');
+        const flowCtx = document.getElementById('flowChart').getContext('2d');
+        const portsCtx = document.getElementById('portsChart').getContext('2d');
+        const srcCtx = document.getElementById('srcChart').getContext('2d');
 
-      // Scan interfaces (tshark -D via backend)
-      if (scanIfacesBtn) {
-        scanIfacesBtn.onclick = async (e) => {
-          e.preventDefault();
-          try {
-            const res = await fetch('/api/interfaces', { headers: { ...authHeaders() } });
-            const data = await res.json();
-            interfacesList.innerHTML = '';
-            if (!data.tshark) {
-              alert('tshark not found on server. Install it (e.g., sudo apt install tshark) and ensure capture permissions.');
-              return;
-            }
-            (data.interfaces || []).forEach(it => {
-              const opt = document.createElement('option');
-              opt.value = it.name;
-              opt.label = it.desc || '';
-              interfacesList.appendChild(opt);
+        const timeFmt = (ts) => new Date(ts * 1000).toLocaleTimeString();
+        const fmtPct = (x) => typeof x === 'number' ? x.toFixed(3) : '-';
+        const fmtNum = (x) => typeof x === 'number' ? x.toLocaleString() : '-';
+
+        function makeChart(ctx, label, color, yMin = 0, yMax = undefined) {
+            return new Chart(ctx, {
+                type: 'line',
+                data: { labels: [], datasets: [{ label, data: [], borderColor: color, tension: 0.2, pointRadius: 0 }]},
+                options: {
+                    responsive: true,
+                    scales: { y: { min: yMin, max: yMax } },
+                    animation: false,
+                },
             });
-            if (!data.interfaces || data.interfaces.length === 0) {
-              alert('No interfaces listed by tshark -D. Try running server with appropriate permissions or verify tshark works.');
-            }
-          } catch (e) {
-            alert('Failed to scan interfaces: ' + (e?.message || e));
-          }
-        };
-      }
+        }
 
-      // List PCAP files available on server
-      if (listPcapsBtn) {
-        listPcapsBtn.onclick = async (e) => {
-          e.preventDefault();
-          try {
-            const res = await fetch('/api/pcaps', { headers: { ...authHeaders() } });
-            const data = await res.json();
-            pcapsList.innerHTML = '';
-            if (!data.ok) {
-              alert('Failed to list PCAPs: ' + (data.error || 'unknown error'));
-              return;
+        // Threshold line plugin
+        const thresholdPlugin = {
+            id: 'thresholdLine',
+            afterDraw(chart, args, opts) {
+                const value = opts && typeof opts.value === 'number' ? opts.value : null;
+                if (value == null) return;
+                const {ctx, chartArea, scales: {y}} = chart;
+                const yPix = y.getPixelForValue(value);
+                ctx.save();
+                ctx.strokeStyle = (opts && opts.color) || '#ef4444';
+                ctx.setLineDash([6,4]);
+                ctx.beginPath();
+                ctx.moveTo(chartArea.left, yPix);
+                ctx.lineTo(chartArea.right, yPix);
+                ctx.stroke();
+                ctx.restore();
             }
-            (data.files || []).forEach(it => {
-              const opt = document.createElement('option');
-              opt.value = it.path;
-              opt.label = it.name || it.path;
-              pcapsList.appendChild(opt);
+        };
+
+        const ddosChart = new Chart(ddosCtx, {
+            type: 'line',
+            data: {
+                labels: [],
+                datasets: [
+                    { label: 'DDoS Fraction', data: [], borderColor: '#e11d48', backgroundColor: 'rgba(225,29,72,0.08)', tension: 0.2, pointRadius: 0 },
+                    { label: 'Uncertainty High', data: [], borderColor: 'transparent', pointRadius: 0 },
+                    { label: 'Uncertainty Low', data: [], borderColor: 'transparent', backgroundColor: 'rgba(255,99,132,0.12)', fill: '-1', pointRadius: 0 },
+                    { label: 'Forecast (next)', data: [], borderColor: '#f59e0b', borderDash: [6,4], tension: 0.2, pointRadius: 0 },
+                    { label: 'Alerts', data: [], type: 'line', borderColor: 'transparent', pointBackgroundColor: '#ef4444', pointRadius: 3, showLine: false },
+                ]
+            },
+            options: {
+                responsive: true,
+                plugins: { thresholdLine: { value: 0.5, color: '#ef4444' }, legend: { labels: { filter: (item) => item.text !== 'Alerts' } } },
+                scales: { y: { min: 0, max: 1 } },
+                animation: false,
+            },
+            plugins: [thresholdPlugin],
+        });
+        const flowChart = makeChart(flowCtx, 'Flow Density', '#2563eb');
+        const portsChart = makeChart(portsCtx, 'Unique Dest Ports', '#16a34a');
+        const srcChart = makeChart(srcCtx, 'Src IP Diversity', '#7c3aed');
+
+        function pushChartPoint(chart, ts, vals, maxPoints = 200) {
+            // vals can be single value or array per dataset index
+            chart.data.labels.push(timeFmt(ts));
+            const arr = Array.isArray(vals) ? vals : [vals];
+            arr.forEach((v, idx) => {
+                if (!chart.data.datasets[idx]) return;
+                chart.data.datasets[idx].data.push(v);
             });
-            if (!data.files || data.files.length === 0) {
-              alert('No .pcap files found in sample-dataset/ or repo.');
+            if (chart.data.labels.length > maxPoints) {
+                chart.data.labels.shift();
+                chart.data.datasets.forEach(ds => ds.data.shift());
             }
-          } catch (e) {
-            alert('Failed to list PCAPs: ' + (e?.message || e));
-          }
-        };
-      }
-
-      // Fixed and de-duplicated handlers are defined below
-
-      document.getElementById('blockBtn').onclick = async () => {
-        const txt = document.getElementById('blockSources').value.trim();
-        const list = txt ? txt.split(',').map(s => s.trim()).filter(Boolean) : [];
-  const res = await fetch('/api/mitigation', { method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders() }, body: JSON.stringify({ block_sources: list }) });
-        const data = await res.json();
-        if (Array.isArray(data.mitigation) && data.mitigation.length) {
-          blockedList.innerHTML = data.mitigation.map(x => `<span class="badge"><span class="dot ${x.stage}"></span>${x.ip} (${x.stage})</span>`).join(' ');
-        } else {
-          const arr = (data.blocked_sources || []);
-          blockedList.innerHTML = arr.length ? arr.map(ip => `<span class="badge"><span class=\"dot monitor\"></span>${ip}</span>`).join(' ') : '(none)';
+            chart.update();
         }
-      };
 
-      document.getElementById('unblockBtn').onclick = async () => {
-        const txt = document.getElementById('unblockSources').value.trim();
-        const list = txt ? txt.split(',').map(s => s.trim()).filter(Boolean) : [];
-  const res = await fetch('/api/mitigation', { method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders() }, body: JSON.stringify({ unblock_sources: list }) });
-        const data = await res.json();
-        if (Array.isArray(data.mitigation) && data.mitigation.length) {
-          blockedList.innerHTML = data.mitigation.map(x => `<span class="badge"><span class="dot ${x.stage}"></span>${x.ip} (${x.stage})</span>`).join(' ');
-        } else {
-          const arr = (data.blocked_sources || []);
-          blockedList.innerHTML = arr.length ? arr.map(ip => `<span class="badge"><span class=\"dot monitor\"></span>${ip}</span>`).join(' ') : '(none)';
-        }
-      };
+        // WebSocket stream
+        const wsProto = location.protocol === 'https:' ? 'wss' : 'ws';
+        const wsToken = encodeURIComponent(getAuthToken() || '');
+        const ws = new WebSocket(`${wsProto}://${location.host}/ws${wsToken ? ('?token=' + wsToken) : ''}`);
+        ws.onmessage = (evt) => {
+            try {
+                const m = JSON.parse(evt.data);
+                const next = m.forecast?.ddos_fraction_next ?? null;
+                const confHi = m.forecast?.confidence_high ?? null;
+                const confLo = m.forecast?.confidence_low ?? null;
+                const alertVal = (m.alert ? m.ddos_fraction : NaN);
+                pushChartPoint(ddosChart, m.ts, [m.ddos_fraction, confHi, confLo, next, alertVal]);
+                pushChartPoint(flowChart, m.ts, m.metrics.flow_density);
+                pushChartPoint(portsChart, m.ts, m.metrics.unique_dest_ports);
+                pushChartPoint(srcChart, m.ts, m.metrics.src_ip_diversity);
 
-      document.getElementById('allowAddBtn').onclick = async () => {
-        const txt = document.getElementById('allowlistInput').value.trim();
-        const list = txt ? txt.split(',').map(s => s.trim()).filter(Boolean) : [];
-  const res = await fetch('/api/mitigation', { method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders() }, body: JSON.stringify({ allowlist_add: list }) });
-        const data = await res.json();
-        if (Array.isArray(data.mitigation) && data.mitigation.length) {
-          blockedList.textContent = data.mitigation.map(x => `${x.ip} (${x.stage})`).join(', ');
-        } else {
-          blockedList.textContent = (data.blocked_sources || []).join(', ') || '(none)';
-        }
-      };
+                if (m.alert || m.forecast?.predicted_alert) {
+                    alertBanner.classList.remove('hidden');
+                    const item = document.createElement('li');
+                    const pred = m.forecast?.predicted_alert && !m.alert ? ' (predicted next window)' : '';
+                    let autoTxt = '';
+                    if (Array.isArray(m.auto_blocked) && m.auto_blocked.length) {
+                        const ab = m.auto_blocked.map(x => typeof x === 'string' ? x : `${x.ip} (${x.stage||'blocked'})`).join(', ');
+                        autoTxt = ` | auto-blocked: ${ab}`;
+                    }
+                    item.textContent = `${timeFmt(m.ts)} ALERT${pred} — ddos_fraction=${fmtPct(m.ddos_fraction)} (threshold ${fmtPct(m.threshold)})${autoTxt}`;
+                    item.style.marginBottom = '8px';
+                    alertList.prepend(item);
+                } else {
+                    alertBanner.classList.add('hidden');
+                }
 
-      document.getElementById('allowRemoveBtn').onclick = async () => {
-        const txt = document.getElementById('allowlistInput').value.trim();
-        const list = txt ? txt.split(',').map(s => s.trim()).filter(Boolean) : [];
-  const res = await fetch('/api/mitigation', { method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders() }, body: JSON.stringify({ allowlist_remove: list }) });
-        const data = await res.json();
-        if (Array.isArray(data.mitigation) && data.mitigation.length) {
-          blockedList.textContent = data.mitigation.map(x => `${x.ip} (${x.stage})`).join(', ');
-        } else {
-          blockedList.textContent = (data.blocked_sources || []).join(', ') || '(none)';
-        }
-      };
+                // Update currently blocked list immediately if present in payload
+                if (Array.isArray(m.mitigation) && m.mitigation.length) {
+                    blockedList.innerHTML = m.mitigation.map(x => `<span class="badge"><span class="dot ${x.stage}"></span>${x.ip} (${x.stage})</span>`).join(' ');
+                } else if (Array.isArray(m.blocked_sources)) {
+                    blockedList.innerHTML = m.blocked_sources.length ? m.blocked_sources.map(ip => `<span class="badge"><span class="dot monitor"></span>${ip}</span>`).join(' ') : '(none)';
+                }
 
-      // External ingest helpers and UI
-      async function postIngest(payload) {
-  const res = await fetch('/api/ingest', { method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders() }, body: JSON.stringify(payload) });
-        if (!res.ok) {
-          let msg = '';
-          try { const data = await res.json(); msg = data.detail || JSON.stringify(data); } catch (e) { msg = await res.text(); }
-          throw new Error(msg || `HTTP ${res.status}`);
-        }
-        return res.json();
-      }
-      const sendIngestBtn = document.getElementById('sendIngestBtn');
-      const sendDemoBtn = document.getElementById('sendDemoBtn');
-      if (sendIngestBtn) {
-        sendIngestBtn.onclick = async () => {
-          ingestResult.textContent = '';
-          try {
-            const payload = JSON.parse(ingestJson.value || '{}');
-            const data = await postIngest(payload);
-            ingestResult.textContent = `Queued ${data.queued} fragment(s)`;
-          } catch (e) {
-            ingestResult.textContent = `Error: ${e.message || e}`;
-          }
-        };
-      }
-      if (sendDemoBtn) {
-        sendDemoBtn.onclick = async () => {
-          ingestResult.textContent = '';
-          const demo = {
-            fragments: [
-              [[0.01,80,6,60,0,1],[0.02,80,6,52,0,1],[0.03,80,6,60,0,1]],
-              [[0.00,443,17,78,1,0],[0.00,443,17,74,1,0]]
-            ],
-            src_ips: ["203.0.113.10","198.51.100.7"],
-            dest_ports: [80,443]
-          };
-          try {
-            const data = await postIngest(demo);
-            ingestResult.textContent = `Queued ${data.queued} demo fragment(s)`;
-          } catch (e) {
-            ingestResult.textContent = `Error: ${e.message || e}`;
-          }
-        };
-      }
-
-      function updateSourceUI() {
-        const kind = sourceKindEl ? sourceKindEl.value : 'iface';
-        if (kind === 'iface') {
-          sourceEl.placeholder = 'eth0';
-          sourceEl.setAttribute('list', 'interfacesList');
-          if (ingestHint) ingestHint.style.display = 'none';
-          if (ingestTest) ingestTest.style.display = 'none';
-          if (scanIfacesBtn) scanIfacesBtn.style.display = '';
-          if (listPcapsBtn) listPcapsBtn.style.display = 'none';
-          const pcapOpts = document.getElementById('pcapOptions'); if (pcapOpts) pcapOpts.style.display = 'none';
-        } else if (kind === 'pcap') {
-          sourceEl.placeholder = '/path/to/file.pcap';
-          sourceEl.setAttribute('list', 'pcapsList');
-          if (ingestHint) ingestHint.style.display = 'none';
-          if (ingestTest) ingestTest.style.display = 'none';
-          if (scanIfacesBtn) scanIfacesBtn.style.display = 'none';
-          if (listPcapsBtn) listPcapsBtn.style.display = '';
-          const pcapOpts = document.getElementById('pcapOptions'); if (pcapOpts) pcapOpts.style.display = '';
-          // Auto-fetch PCAP list on switch to pcap view for convenience
-          if (pcapsList && (!pcapsList.options || pcapsList.options.length === 0)) {
-            if (listPcapsBtn && typeof listPcapsBtn.onclick === 'function') {
-              listPcapsBtn.onclick(new Event('click'));
+                // Update threshold badge and line on chart
+                if (typeof m.threshold === 'number') {
+                    const thr = m.threshold;
+                    document.getElementById('thresholdBadge').textContent = thr.toFixed(2);
+                    ddosChart.options.plugins.thresholdLine.value = thr;
+                }
+            } catch (e) {
+                console.error('Bad WS message', e);
             }
-          }
-        } else {
-          sourceEl.placeholder = '(optional) e.g., external';
-          sourceEl.removeAttribute('list');
-          if (ingestHint) ingestHint.style.display = '';
-          if (ingestTest) ingestTest.style.display = '';
-          if (scanIfacesBtn) scanIfacesBtn.style.display = 'none';
-          if (listPcapsBtn) listPcapsBtn.style.display = 'none';
-          const pcapOpts = document.getElementById('pcapOptions'); if (pcapOpts) pcapOpts.style.display = 'none';
+        };
+
+        // Controls
+        document.getElementById('startBtn').onclick = async () => {
+            const body = {
+                source: sourceEl.value.trim() || (sourceKindEl.value === 'http' ? 'external' : ''),
+                model_path: document.getElementById('model').value.trim(),
+                dataset_type: (document.getElementById('datasetType').value || '').trim() || null,
+                attack_net: (document.getElementById('attackNet').value || '').trim() || null,
+                victim_net: (document.getElementById('victimNet').value || '').trim() || null,
+                threshold: parseFloat(document.getElementById('threshold').value || '0.5'),
+                source_kind: sourceKindEl.value,
+                ground_truth_override: (document.getElementById('gtOverride').value || '') || null,
+            };
+            if (sourceKindEl.value === 'pcap') {
+                if (pcapRealtimeEl) body.pcap_realtime = !!pcapRealtimeEl.checked;
+                if (pcapLoopEl) body.pcap_loop = !!pcapLoopEl.checked;
+            }
+            const res = await fetch('/api/start', { method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders() }, body: JSON.stringify(body) });
+            if (!res.ok) {
+                let msg = '';
+                try {
+                    const data = await res.json();
+                    msg = data.detail || JSON.stringify(data);
+                } catch (e) {
+                    msg = await res.text();
+                }
+                alert(`Start failed (${res.status}): ${msg}`);
+                return;
+            }
+            refreshStatus();
+        };
+
+        // Stop handler: POST /api/stop and refresh status
+        document.getElementById('stopBtn').onclick = async () => {
+            try {
+                const res = await fetch('/api/stop', { method: 'POST', headers: { ...authHeaders() } });
+                if (!res.ok) {
+                    let msg = '';
+                    try { const data = await res.json(); msg = data.detail || JSON.stringify(data); } catch (e) { msg = await res.text(); }
+                    alert(`Stop failed (${res.status}): ${msg}`);
+                }
+            } catch (e) {
+                console.error('Stop error', e);
+            } finally {
+                setTimeout(refreshStatus, 200);
+            }
+        };
+
+        // Scan interfaces (tshark -D via backend)
+        if (scanIfacesBtn) {
+            scanIfacesBtn.onclick = async (e) => {
+                e.preventDefault();
+                try {
+                    const res = await fetch('/api/interfaces', { headers: { ...authHeaders() } });
+                    const data = await res.json();
+                    interfacesList.innerHTML = '';
+                    if (!data.tshark) {
+                        alert('tshark not found on server. Install it (e.g., sudo apt install tshark) and ensure capture permissions.');
+                        return;
+                    }
+                    (data.interfaces || []).forEach(it => {
+                        const opt = document.createElement('option');
+                        opt.value = it.name;
+                        opt.label = it.desc || '';
+                        interfacesList.appendChild(opt);
+                    });
+                    if (!data.interfaces || data.interfaces.length === 0) {
+                        alert('No interfaces listed by tshark -D. Try running server with appropriate permissions or verify tshark works.');
+                    }
+                } catch (e) {
+                    alert('Failed to scan interfaces: ' + (e?.message || e));
+                }
+            };
         }
-      }
-  if (sourceKindEl) sourceKindEl.addEventListener('change', updateSourceUI);
-      updateSourceUI();
 
-      document.getElementById('savePolicyBtn').onclick = async () => {
-        const hyst = parseInt(document.getElementById('hysteresisInput').value || '2', 10);
-        const cool = parseInt(document.getElementById('cooldownInput').value || '120', 10);
-        await fetch('/api/mitigation', {
-          method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders() },
-          body: JSON.stringify({ hysteresis_windows: hyst, cooldown_seconds: cool })
-        });
-      };
+        // List PCAP files available on server
+        if (listPcapsBtn) {
+            listPcapsBtn.onclick = async (e) => {
+                e.preventDefault();
+                try {
+                    const res = await fetch('/api/pcaps', { headers: { ...authHeaders() } });
+                    const data = await res.json();
+                    pcapsList.innerHTML = '';
+                    if (!data.ok) {
+                        alert('Failed to list PCAPs: ' + (data.error || 'unknown error'));
+                        return;
+                    }
+                    (data.files || []).forEach(it => {
+                        const opt = document.createElement('option');
+                        opt.value = it.path;
+                        opt.label = it.name || it.path;
+                        pcapsList.appendChild(opt);
+                    });
+                    if (!data.files || data.files.length === 0) {
+                        alert('No .pcap files found in sample-dataset/ or repo.');
+                    }
+                } catch (e) {
+                    alert('Failed to list PCAPs: ' + (e?.message || e));
+                }
+            };
+        }
 
-      // Theme toggle
-      const themeKey = 'lucid-theme';
-      const setThemeIcon = () => {
-        const btn = document.getElementById('themeToggle');
-        if (!btn) return;
-        const isLight = document.body.classList.contains('theme-light');
-        // Show the icon of the target mode to switch to
-        btn.textContent = isLight ? '🌙' : '☀️';
-      };
+        document.getElementById('blockBtn').onclick = async () => {
+            const txt = document.getElementById('blockSources').value.trim();
+            const list = txt ? txt.split(',').map(s => s.trim()).filter(Boolean) : [];
+            const res = await fetch('/api/mitigation', { method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders() }, body: JSON.stringify({ block_sources: list }) });
+            const data = await res.json();
+            if (Array.isArray(data.mitigation) && data.mitigation.length) {
+                blockedList.innerHTML = data.mitigation.map(x => `<span class="badge"><span class="dot ${x.stage}"></span>${x.ip} (${x.stage})</span>`).join(' ');
+            } else {
+                const arr = (data.blocked_sources || []);
+                blockedList.innerHTML = arr.length ? arr.map(ip => `<span class="badge"><span class="dot monitor"></span>${ip}</span>`).join(' ') : '(none)';
+            }
+        };
 
-      const applyTheme = (t) => {
-        document.body.classList.remove('theme-light','theme-dark');
-        document.body.classList.add(t);
-        try { localStorage.setItem(themeKey, t); } catch {}
-        applyChartTheme();
-        setThemeIcon();
-      };
-      const saved = (() => { try { return localStorage.getItem(themeKey); } catch { return null; } })();
-      applyTheme(saved || 'theme-light');
-      document.getElementById('themeToggle').onclick = () => {
-        const next = document.body.classList.contains('theme-light') ? 'theme-dark' : 'theme-light';
-        applyTheme(next);
-      };
+        document.getElementById('unblockBtn').onclick = async () => {
+            const txt = document.getElementById('unblockSources').value.trim();
+            const list = txt ? txt.split(',').map(s => s.trim()).filter(Boolean) : [];
+            const res = await fetch('/api/mitigation', { method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders() }, body: JSON.stringify({ unblock_sources: list }) });
+            const data = await res.json();
+            if (Array.isArray(data.mitigation) && data.mitigation.length) {
+                blockedList.innerHTML = data.mitigation.map(x => `<span class="badge"><span class="dot ${x.stage}"></span>${x.ip} (${x.stage})</span>`).join(' ');
+            } else {
+                const arr = (data.blocked_sources || []);
+                blockedList.innerHTML = arr.length ? arr.map(ip => `<span class="badge"><span class="dot monitor"></span>${ip}</span>`).join(' ') : '(none)';
+            }
+        };
 
-      // Chart theming
-      function applyChartTheme() {
-        const isLight = document.body.classList.contains('theme-light');
-        const grid = isLight ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.08)';
-        const tick = isLight ? '#475569' : '#cbd5e1';
-        [ddosChart, flowChart, portsChart, srcChart].forEach(c => {
-          c.options.scales.x.grid.color = grid;
-          c.options.scales.y.grid.color = grid;
-          c.options.scales.x.ticks.color = tick;
-          c.options.scales.y.ticks.color = tick;
-          c.update('none');
-        });
-      }
+        document.getElementById('allowAddBtn').onclick = async () => {
+            const txt = document.getElementById('allowlistInput').value.trim();
+            const list = txt ? txt.split(',').map(s => s.trim()).filter(Boolean) : [];
+            const res = await fetch('/api/mitigation', { method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders() }, body: JSON.stringify({ allowlist_add: list }) });
+            const data = await res.json();
+            if (Array.isArray(data.mitigation) && data.mitigation.length) {
+                blockedList.textContent = data.mitigation.map(x => `${x.ip} (${x.stage})`).join(', ');
+            } else {
+                blockedList.textContent = (data.blocked_sources || []).join(', ') || '(none)';
+            }
+        };
+
+        document.getElementById('allowRemoveBtn').onclick = async () => {
+            const txt = document.getElementById('allowlistInput').value.trim();
+            const list = txt ? txt.split(',').map(s => s.trim()).filter(Boolean) : [];
+            const res = await fetch('/api/mitigation', { method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders() }, body: JSON.stringify({ allowlist_remove: list }) });
+            const data = await res.json();
+            if (Array.isArray(data.mitigation) && data.mitigation.length) {
+                blockedList.textContent = data.mitigation.map(x => `${x.ip} (${x.stage})`).join(', ');
+            } else {
+                blockedList.textContent = (data.blocked_sources || []).join(', ') || '(none)';
+            }
+        };
+
+        // External ingest helpers and UI
+        async function postIngest(payload) {
+            const res = await fetch('/api/ingest', { method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders() }, body: JSON.stringify(payload) });
+            if (!res.ok) {
+                let msg = '';
+                try { const data = await res.json(); msg = data.detail || JSON.stringify(data); } catch (e) { msg = await res.text(); }
+                throw new Error(msg || `HTTP ${res.status}`);
+            }
+            return res.json();
+        }
+        const sendIngestBtn = document.getElementById('sendIngestBtn');
+        const sendDemoBtn = document.getElementById('sendDemoBtn');
+        if (sendIngestBtn) {
+            sendIngestBtn.onclick = async () => {
+                ingestResult.textContent = '';
+                try {
+                    const payload = JSON.parse(ingestJson.value || '{}');
+                    const data = await postIngest(payload);
+                    ingestResult.textContent = `Queued ${data.queued} fragment(s)`;
+                } catch (e) {
+                    ingestResult.textContent = `Error: ${e.message || e}`;
+                }
+            };
+        }
+        if (sendDemoBtn) {
+            sendDemoBtn.onclick = async () => {
+                ingestResult.textContent = '';
+                const demo = {
+                    fragments: [
+                        [[0.01,80,6,60,0,1],[0.02,80,6,52,0,1],[0.03,80,6,60,0,1]],
+                        [[0.00,443,17,78,1,0],[0.00,443,17,74,1,0]]
+                    ],
+                    src_ips: ["203.0.113.10","198.51.100.7"],
+                    dest_ports: [80,443]
+                };
+                try {
+                    const data = await postIngest(demo);
+                    ingestResult.textContent = `Queued ${data.queued} demo fragment(s)`;
+                } catch (e) {
+                    ingestResult.textContent = `Error: ${e.message || e}`;
+                }
+            };
+        }
+
+        function updateSourceUI() {
+            const kind = sourceKindEl ? sourceKindEl.value : 'iface';
+            if (kind === 'iface') {
+                sourceEl.placeholder = 'eth0';
+                sourceEl.setAttribute('list', 'interfacesList');
+                if (ingestHint) ingestHint.style.display = 'none';
+                if (ingestTest) ingestTest.style.display = 'none';
+                if (scanIfacesBtn) scanIfacesBtn.style.display = '';
+                if (listPcapsBtn) listPcapsBtn.style.display = 'none';
+                const pcapOpts = document.getElementById('pcapOptions'); if (pcapOpts) pcapOpts.style.display = 'none';
+            } else if (kind === 'pcap') {
+                sourceEl.placeholder = '/path/to/file.pcap';
+                sourceEl.setAttribute('list', 'pcapsList');
+                if (ingestHint) ingestHint.style.display = 'none';
+                if (ingestTest) ingestTest.style.display = 'none';
+                if (scanIfacesBtn) scanIfacesBtn.style.display = 'none';
+                if (listPcapsBtn) listPcapsBtn.style.display = '';
+                const pcapOpts = document.getElementById('pcapOptions'); if (pcapOpts) pcapOpts.style.display = '';
+                // Auto-fetch PCAP list on switch to pcap view for convenience
+                if (pcapsList && (!pcapsList.options || pcapsList.options.length === 0)) {
+                    if (listPcapsBtn && typeof listPcapsBtn.onclick === 'function') {
+                        listPcapsBtn.onclick(new Event('click'));
+                    }
+                }
+            } else {
+                sourceEl.placeholder = '(optional) e.g., external';
+                sourceEl.removeAttribute('list');
+                if (ingestHint) ingestHint.style.display = '';
+                if (ingestTest) ingestTest.style.display = '';
+                if (scanIfacesBtn) scanIfacesBtn.style.display = 'none';
+                if (listPcapsBtn) listPcapsBtn.style.display = 'none';
+                const pcapOpts = document.getElementById('pcapOptions'); if (pcapOpts) pcapOpts.style.display = 'none';
+            }
+        }
+        if (sourceKindEl) sourceKindEl.addEventListener('change', updateSourceUI);
+        updateSourceUI();
+
+        document.getElementById('savePolicyBtn').onclick = async () => {
+            const hyst = parseInt(document.getElementById('hysteresisInput').value || '2', 10);
+            const cool = parseInt(document.getElementById('cooldownInput').value || '120', 10);
+            await fetch('/api/mitigation', {
+                method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders() },
+                body: JSON.stringify({ hysteresis_windows: hyst, cooldown_seconds: cool })
+            });
+        };
+
+        // Theme toggle
+        const themeKey = 'lucid-theme';
+        const setThemeIcon = () => {
+            const btn = document.getElementById('themeToggle');
+            if (!btn) return;
+            const isLight = document.body.classList.contains('theme-light');
+            // Show the icon of the target mode to switch to
+            btn.textContent = isLight ? '🌙' : '☀️';
+        };
+
+        const applyTheme = (t) => {
+            document.body.classList.remove('theme-light', 'theme-dark');
+            document.body.classList.add(t);
+            try { localStorage.setItem(themeKey, t); } catch {}
+            applyChartTheme();
+            setThemeIcon();
+        };
+        const saved = (() => { try { return localStorage.getItem(themeKey); } catch { return null; } })();
+        applyTheme(saved || 'theme-light');
+        document.getElementById('themeToggle').onclick = () => {
+            const next = document.body.classList.contains('theme-light') ? 'theme-dark' : 'theme-light';
+            applyTheme(next);
+        };
+
+        // Chart theming
+        function applyChartTheme() {
+            const isLight = document.body.classList.contains('theme-light');
+            const grid = isLight ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.08)';
+            const tick = isLight ? '#475569' : '#cbd5e1';
+            [ddosChart, flowChart, portsChart, srcChart].forEach(c => {
+                c.options.scales.x.grid.color = grid;
+                c.options.scales.y.grid.color = grid;
+                c.options.scales.x.ticks.color = tick;
+                c.options.scales.y.ticks.color = tick;
+                c.update('none');
+            });
+        }
     </script>
-  </body>
-  </html>
+</body>
+</html>
