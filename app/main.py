@@ -371,7 +371,14 @@ class DetectorService:
                     if v is None:
                         return None
                     return str(v).strip().lower() in ("1","true","yes","on")
-                self._pcap_path = resolved_source
+                # Normalize PCAP path (absolute, forward slashes) to avoid Windows path quirks with tshark/pyshark
+                try:
+                    norm = os.path.abspath(resolved_source)
+                except Exception:
+                    norm = resolved_source
+                if os.name == 'nt':
+                    norm = norm.replace('\\', '/')
+                self._pcap_path = norm
                 self._pcap_realtime = bool(cfg.pcap_realtime) if (cfg.pcap_realtime is not None) else bool(_env_bool("LUCID_PCAP_REALTIME"))
                 self._pcap_loop = bool(cfg.pcap_loop) if (cfg.pcap_loop is not None) else bool(_env_bool("LUCID_PCAP_LOOP"))
                 logger.info("PCAP will be opened in detector thread with a dedicated event loop")
