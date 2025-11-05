@@ -252,11 +252,13 @@ def process_live_traffic(cap, dataset_type, in_labels, max_flow_len, traffic_typ
     elif isinstance(cap, pyshark.FileCapture) == True:
         window_start = None
         window_end = None
+        _eof = False
         while True:
             try:
                 pkt = cap.next()
             except Exception:
-                # EOF or read error -> stop this window
+                # EOF or read error -> stop this window and mark EOF for caller
+                _eof = True
                 break
             try:
                 ts = packet_epoch_seconds(pkt)
@@ -273,6 +275,10 @@ def process_live_traffic(cap, dataset_type, in_labels, max_flow_len, traffic_typ
                 break
             pf = parse_packet(pkt)
             temp_dict = store_packet(pf, temp_dict, window_start, max_flow_len)
+        try:
+            setattr(cap, "_lucid_eof", bool(_eof))
+        except Exception:
+            pass
 
     apply_labels(temp_dict, labelled_flows, in_labels, traffic_type)
     return labelled_flows

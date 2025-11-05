@@ -517,28 +517,36 @@ class DetectorService:
                     cap = self.cap if self.cap is not None else self.cap_file
                     samples = process_live_traffic(cap, None, self.labels, self.max_flow_len, traffic_type="all", time_window=self.time_window)
                     if len(samples) == 0:
-                        # For file capture, when finished, either loop or stop
+                        # For file capture, empty window may occur without EOF; only complete when EOF seen
                         if isinstance(cap, pyshark.FileCapture):
-                            if self._pcap_loop and self._pcap_path:
-                                try:
-                                    # Close and reopen to loop from beginning
+                            eof = False
+                            try:
+                                eof = bool(getattr(self.cap_file, "_lucid_eof", False))
+                            except Exception:
+                                eof = False
+                            if eof:
+                                if self._pcap_loop and self._pcap_path:
                                     try:
-                                        if self.cap_file:
-                                            self.cap_file.close()
-                                    except Exception:
-                                        pass
-                                    # Reopen in worker thread
-                                    self.cap_file = pyshark.FileCapture(self._pcap_path, use_json=True, keep_packets=False)
-                                    # reset indices/history if desired; keep history for charts
-                                    self._window_index = 0
-                                    logger.info(f"Looping PCAP from beginning: {self._pcap_path}")
-                                except Exception as e:
-                                    self._status = "error"
-                                    self._last_error = f"Failed to loop PCAP: {e}"
+                                        # Close and reopen to loop from beginning
+                                        try:
+                                            if self.cap_file:
+                                                self.cap_file.close()
+                                        except Exception:
+                                            pass
+                                        # Reopen in worker thread
+                                        self.cap_file = pyshark.FileCapture(self._pcap_path, use_json=True, keep_packets=False)
+                                        # reset indices/history if desired; keep history for charts
+                                        self._window_index = 0
+                                        logger.info(f"Looping PCAP from beginning: {self._pcap_path}")
+                                    except Exception as e:
+                                        self._status = "error"
+                                        self._last_error = f"Failed to loop PCAP: {e}"
+                                        break
+                                else:
+                                    self._status = "completed"
                                     break
-                            else:
-                                self._status = "completed"
-                                break
+                            # Not EOF; proceed to next window attempt
+                            continue
                         # For live capture, just continue to next window
                         continue
 
