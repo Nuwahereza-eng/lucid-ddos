@@ -501,7 +501,7 @@
                 if (pcapLoopEl) body.pcap_loop = !!pcapLoopEl.checked;
             }
             const res = await fetch('/api/start', { method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders() }, body: JSON.stringify(body) });
-            if (!res.ok) {
+                    if (!res.ok) {
                 let msg = '';
                 try {
                     const data = await res.json();
@@ -512,7 +512,27 @@
                 alert(`Start failed (${res.status}): ${msg}`);
                 return;
             }
-            refreshStatus();
+                        // Try to populate charts from recent history in case the websocket missed messages
+                        try {
+                            await fetchHistoryAndPopulate();
+                        } catch (e) {
+                            console.debug('fetchHistoryAndPopulate failed', e);
+                        }
+                        // Ensure websocket is open; if not, attempt a reconnect
+                        try {
+                            if (!ws || ws.readyState !== 1) {
+                                try {
+                                    const token = encodeURIComponent(getAuthToken() || '');
+                                    const newUrl = `${wsProto}://${location.host}/ws${token ? ('?token=' + token) : ''}`;
+                                    if (ws && (ws.readyState === 0 || ws.readyState === 1)) {
+                                        try { ws.close(); } catch(e){}
+                                    }
+                                    ws = new WebSocket(newUrl);
+                                    ws.onmessage = (evt) => { try { const m = JSON.parse(evt.data); handleWsMessage(m); } catch(e){console.error(e);} };
+                                } catch (e) { console.debug('WebSocket reconnect failed', e); }
+                            }
+                        } catch (e) {}
+                        refreshStatus();
         };
 
         // Stop handler: POST /api/stop and refresh status
