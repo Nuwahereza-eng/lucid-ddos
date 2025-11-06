@@ -139,6 +139,9 @@ class DetectorService:
         # KPI configuration
         self._gt_override = None
         self._kpi_source = "none"  # dataset | http-labels | override | none
+        # cumulative prediction accounting
+        self._pos_total = 0
+        self._samples_total = 0
 
     def _autodiscover_model_path(self) -> Optional[str]:
         """Try to find a model .h5 if none provided, preferring ./output then repo root.
@@ -206,6 +209,7 @@ class DetectorService:
         tpr = (self._tp / (self._tp + self._fn)) if (self._tp + self._fn) > 0 else None
         fpr = (self._fp / (self._fp + self._tn)) if (self._fp + self._tn) > 0 else None
         ttd = (sum(self._ttds) / len(self._ttds)) if self._ttds else None
+        pos_rate = (self._pos_total / self._samples_total) if self._samples_total > 0 else None
         return {
             "status": self._status,
             "last_error": self._last_error,
@@ -216,6 +220,7 @@ class DetectorService:
             "kpi_counts": {"TP": self._tp, "FP": self._fp, "TN": self._tn, "FN": self._fn},
             "kpi_source": self._kpi_source,
             "prevented_downtime_min": self._prevented_downtime_min,
+            "positive_rate": pos_rate,
         }
 
     def stop(self):
@@ -410,6 +415,8 @@ class DetectorService:
         self._gt_override = cfg.ground_truth_override
         # Reset KPI counters and mitigation state for a fresh run
         self._tp = self._fp = self._tn = self._fn = 0
+        self._pos_total = 0
+        self._samples_total = 0
         self._attack_active = False
         self._attack_start_ts = None
         self._first_alert_ts = None
@@ -583,6 +590,9 @@ class DetectorService:
 
                 pos_count = int(np.sum(y_pred)) if y_pred.shape[0] > 0 else 0
                 ddos_fraction = float(pos_count / y_pred.shape[0]) if y_pred.shape[0] > 0 else 0.0
+                # Update cumulative prediction stats
+                self._pos_total += pos_count
+                self._samples_total += int(y_pred.shape[0])
                 alert = ddos_fraction >= self.threshold
 
                 # Ground-truth window label if available (any flow labeled ddos), or overridden
