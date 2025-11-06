@@ -117,8 +117,12 @@ def packet_epoch_seconds(pkt) -> float:
         getattr(pkt, "sniff_timestamp", None),
     ):
         if val is not None:
+            # Fast-path numeric strings/ints, skip obvious ISO-like strings
             try:
-                return float(str(val))
+                s = str(val).strip()
+                # numeric pattern only (e.g., 1699301234.123456)
+                if s and all(c in "0123456789.+-eE" for c in s) and not ("-" in s and ":" in s):
+                    return float(s)
             except Exception:
                 pass
     # 2) datetime object
