@@ -284,7 +284,7 @@ pip install -r requirements.txt
 
 2) Start the web server:
 
-```
+```bash
 python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
 ```
 
@@ -335,7 +335,7 @@ services:
 			sudo apt-get update
 			sudo apt-get install -y --no-install-recommends tshark
 			pip install -r requirements-hosted.txt
-		startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+		startCommand: python -m uvicorn app.main:app --host 0.0.0.0 --port $PORT
 		envVars:
 			- key: PYSHARK_TSHARK_PATH
 				value: /usr/bin/tshark
