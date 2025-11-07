@@ -234,17 +234,7 @@ class DetectorService:
         if self._thread and self._thread.is_alive():
             self._thread.join(timeout=3)
         self._thread = None
-        # close captures
-        try:
-            if self.cap:
-                self.cap.close()
-        except Exception:
-            pass
-        try:
-            if self.cap_file:
-                self.cap_file.close()
-        except Exception:
-            pass
+        # Note: captures are closed inside the worker thread to avoid asyncio loop errors on Windows
         self.cap = None
         self.cap_file = None
         self._status = "idle"
@@ -446,8 +436,8 @@ class DetectorService:
             asyncio.set_event_loop(worker_loop)
         except Exception:
             worker_loop = None
-        while not self._stop_event.is_set():
-            try:
+        try:
+            while not self._stop_event.is_set():
                 # Ingest traffic for this window
                 if self._source_kind == "http":
                     # Drain ingest queue for the duration of time_window, with responsive stop
@@ -527,10 +517,18 @@ class DetectorService:
                         # For file capture, empty window may occur without EOF; only complete when EOF seen
                         if isinstance(cap, pyshark.FileCapture):
                             eof = False
+                            err = None
                             try:
                                 eof = bool(getattr(self.cap_file, "_lucid_eof", False))
+                                err = getattr(self.cap_file, "_lucid_error", None)
                             except Exception:
                                 eof = False
+                                err = None
+                            if err:
+                                # Surface PCAP read errors (e.g., tshark missing) instead of silently completing
+                                self._status = "error"
+                                self._last_error = f"PCAP read error (tshark missing or crashed?): {err}"
+                                break
                             if eof:
                                 if self._pcap_loop and self._pcap_path:
                                     try:
@@ -770,15 +768,45 @@ class DetectorService:
                         step = 0.25 if remaining > 0.25 else remaining
                         time.sleep(step)
                         remaining -= step
-
-            except Exception as e:
-                try:
-                    logger.exception("Error in detector loop")
-                except Exception:
-                    pass
-                self._last_error = str(e)
-                self._status = "error"
-                break
+        except Exception as e:
+            try:
+                logger.exception("Error in detector loop")
+            except Exception:
+                pass
+            self._last_error = str(e)
+            self._status = "error"
+        finally:
+            # Ensure captures are closed in the same worker thread to avoid asyncio loop conflicts on Windows
+            try:
+                if self.cap_file is not None:
+                    try:
+                        self.cap_file.close()
+                    except Exception:
+                        pass
+            finally:
+                self.cap_file = None
+            try:
+                if self.cap is not None:
+                    try:
+                        self.cap.close()
+                    except Exception:
+                        pass
+            finally:
+                self.cap = None
+            # Best-effort: close worker loop if we created one
+            try:
+                loop = asyncio.get_event_loop()
+                if loop and loop is worker_loop:
+                    try:
+                        loop.stop()
+                    except Exception:
+                        pass
+                    try:
+                        loop.close()
+                    except Exception:
+                        pass
+            except Exception:
+                pass
 
     def _compute_metrics(self, samples: List):
         # samples: list of tuples (five_tuple, flow_dict)

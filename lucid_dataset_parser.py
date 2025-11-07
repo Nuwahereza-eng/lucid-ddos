@@ -125,13 +125,8 @@ def packet_epoch_seconds(pkt) -> float:
                     return float(s)
             except Exception:
                 pass
-    # 2) datetime object
-    st = getattr(pkt, "sniff_time", None)
-    if st is not None:
-        try:
-            return float(st.timestamp())
-        except Exception:
-            pass
+    # 2) Avoid accessing pkt.sniff_time on some pyshark versions (property may try float() on ISO strings)
+    # We'll rely on ISO parsing below instead of sniff_time to prevent ValueError propagation.
     # 3) ISO-8601 strings possibly ending with 'Z' and 9-digit fractional seconds
     for iso in (
         getattr(pkt, "sniff_timestamp", None),
@@ -269,8 +264,16 @@ def process_live_traffic(cap, dataset_type, in_labels, max_flow_len, traffic_typ
                 return buf, False
             try:
                 return cap.next(), False
-            except Exception:
+            except StopIteration:
+                # True EOF
                 return None, True
+            except Exception as exc:
+                # Not EOF: record error so caller can surface it; do NOT mark EOF here
+                try:
+                    setattr(cap, "_lucid_error", str(exc))
+                except Exception:
+                    pass
+                return None, False
 
         while True:
             pkt, eof = next_pkt()
