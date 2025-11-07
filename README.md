@@ -319,6 +319,47 @@ Alerts are raised when the `DDOS Fraction` exceeds the chosen threshold (default
 - Time window and max flow length are automatically parsed from the model filename (`<t>t-<n>n-...h5`) with fallbacks to 10/10.
 - The web server streams data via WebSocket at `/ws` and provides control endpoints under `/api/*`.
 
+### Deploying on Render (Native Python Environment)
+
+If you use Render's native Python runtime (not Docker), you must install `tshark` during the build so that `pyshark` can parse PCAP files.
+
+Example `render.yaml` for native runtime:
+
+```yaml
+services:
+	- type: web
+		name: lucid-ddos
+		env: python
+		plan: free
+		buildCommand: |
+			sudo apt-get update
+			sudo apt-get install -y --no-install-recommends tshark
+			pip install -r requirements-hosted.txt
+		startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+		envVars:
+			- key: PYSHARK_TSHARK_PATH
+				value: /usr/bin/tshark
+			- key: LUCID_PCAP_DIRS
+				value: /opt/render/project/src/sample-dataset
+```
+
+Key points:
+
+- `tshark` is required even for offline PCAP playback. Without it, the detector will set status `error` and report a PCAP read error.
+- Use `requirements-hosted.txt` (TensorFlow CPU compatible with newer FastAPI/Pydantic constraints) or adapt `requirements.txt` if your Python version matches.
+- Set `PYSHARK_TSHARK_PATH` to the installed binary path (`which tshark`). The code now looks for `PYSHARK_TSHARK_PATH` or `TSHARK_PATH` before falling back.
+- Ensure your model and PCAP files are checked into the repo so they are available at build time (`output/10t-10n-...h5`, `sample-dataset/*.pcap`).
+
+Verification after deploy:
+
+1. Check build log for `tshark -v` output (optional if using Docker; for native, confirm install succeeded).
+2. Hit `/api/pcaps` – should list your PCAP files. If empty, confirm `LUCID_PCAP_DIRS` and that files exist.
+3. POST `/api/start` with a PCAP source. Status should remain `running`; if it switches to `error` with `PCAP read error (tshark missing or crashed?)`, installation failed.
+4. Monitor `/api/status` for increasing `samples` and `history` length.
+
+Fallback: If `apt-get` is not permitted on your chosen plan, switch to Docker (the provided `Dockerfile` already installs `tshark`).
+
+
 
 ## Acknowledgements
 

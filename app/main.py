@@ -505,7 +505,15 @@ class DetectorService:
                     # Lazy-open PCAP capture in the worker thread with its own event loop
                     if self._source_kind == "pcap" and self.cap_file is None and self._pcap_path:
                         try:
-                            self.cap_file = pyshark.FileCapture(self._pcap_path, use_json=True, keep_packets=False)
+                            # Respect explicit tshark path if provided
+                            _kwargs = {"use_json": True, "keep_packets": False}
+                            try:
+                                _tp = os.environ.get("PYSHARK_TSHARK_PATH") or os.environ.get("TSHARK_PATH") or self._tshark_path()
+                            except Exception:
+                                _tp = None
+                            if _tp:
+                                _kwargs["tshark_path"] = _tp
+                            self.cap_file = pyshark.FileCapture(self._pcap_path, **_kwargs)
                             logger.info(f"Opened PCAP in worker thread: {self._pcap_path}")
                         except Exception as e:
                             self._status = "error"
@@ -538,8 +546,15 @@ class DetectorService:
                                                 self.cap_file.close()
                                         except Exception:
                                             pass
-                                        # Reopen in worker thread
-                                        self.cap_file = pyshark.FileCapture(self._pcap_path, use_json=True, keep_packets=False)
+                                        # Reopen in worker thread (honor tshark path if provided)
+                                        _kwargs = {"use_json": True, "keep_packets": False}
+                                        try:
+                                            _tp = os.environ.get("PYSHARK_TSHARK_PATH") or os.environ.get("TSHARK_PATH") or self._tshark_path()
+                                        except Exception:
+                                            _tp = None
+                                        if _tp:
+                                            _kwargs["tshark_path"] = _tp
+                                        self.cap_file = pyshark.FileCapture(self._pcap_path, **_kwargs)
                                         # reset indices/history if desired; keep history for charts
                                         self._window_index = 0
                                         logger.info(f"Looping PCAP from beginning: {self._pcap_path}")
