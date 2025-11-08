@@ -359,6 +359,131 @@ Verification after deploy:
 
 Fallback: If `apt-get` is not permitted on your chosen plan, switch to Docker (the provided `Dockerfile` already installs `tshark`).
 
+### Render Deployment Troubleshooting
+
+Common issue: `No module named uvicorn` after Render runs `python -m uvicorn app.main:app ...`.
+
+Root cause: Your Build Command didn’t install dependencies into the SAME interpreter used at runtime (Render’s virtualenv), or `uvicorn` is missing from the dependency file that Render actually installs.
+
+Quick checklist:
+
+1. Single source of truth: Confirm which file Render installs (for this repo prefer `requirements-hosted.txt`). If you rely on `requirements.txt` ensure it also contains `uvicorn[standard]`.
+2. Build logs: Look for lines containing `pip install -r ...` and verify `uvicorn` appears.
+3. Custom build script: If you override the build step, include:
+	 ```bash
+	 pip install -r requirements-hosted.txt
+	 ```
+4. Interpreter mismatch: If you create a venv manually, Render’s Start Command might use a different Python. Use module invocation (`python -m uvicorn`) so it imports from that interpreter’s site-packages.
+5. TShark errors: If PCAP replay instantly “completes” with 0 samples and status switches to `error`, check for `PCAP read error (tshark missing or crashed?)`. Install tshark or switch to Docker.
+6. Environment variable `PYSHARK_TSHARK_PATH`: Set it explicitly if tshark isn’t on PATH.
+
+Minimal native deployment recipe (no Docker):
+
+```bash
+# Build Command
+bash render-build.sh  # script installs tshark + requirements-hosted
+
+# Start Command
+python -m uvicorn app.main:app --host 0.0.0.0 --port $PORT
+```
+
+If you use Poetry:
+
+```bash
+# Build Command
+poetry export -f requirements.txt --without-hashes -o requirements.txt
+pip install -r requirements.txt
+
+# OR
+poetry install --no-dev --no-root
+
+# Start Command Option A (pip install path)
+python -m uvicorn app.main:app --host 0.0.0.0 --port $PORT
+# Start Command Option B (poetry environment)
+poetry run uvicorn app.main:app --host 0.0.0.0 --port $PORT
+```
+
+Verification sequence post-deploy:
+
+```bash
+curl -s https://<your-service>/api/pcaps | jq
+curl -s https://<your-service>/api/status | jq
+```
+
+Start detection (example JSON):
+
+```bash
+curl -X POST https://<your-service>/api/start \
+	-H 'Content-Type: application/json' \
+	-d '{"source":"sample-dataset/CIC-DDoS-2019-UDPLag.pcap","threshold":0.5}'
+```
+
+Poll until `samples` rises above 0:
+
+```bash
+watch -n2 curl -s https://<your-service>/api/status | jq .status,.positive_rate,.accuracy
+```
+
+### Local Quick Start (Web Dashboard)
+
+Choose one of the dependency sets:
+
+```bash
+python -m pip install --upgrade pip
+pip install -r requirements-hosted.txt   # Recommended (TensorFlow CPU + compatible FastAPI)
+# OR
+pip install -r requirements.txt          # Original set (TF 2.7.1)
+```
+
+Run the server:
+
+```bash
+python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
+```
+
+Start a detection run (example):
+
+```bash
+curl -X POST http://localhost:8000/api/start \
+	-H 'Content-Type: application/json' \
+	-d '{"source":"sample-dataset/CIC-DDoS-2019-UDPLag.pcap","threshold":0.5}'
+```
+
+Open `http://localhost:8000/` for charts and live metrics.
+
+Stop:
+
+```bash
+curl -X POST http://localhost:8000/api/stop
+```
+
+### Smoke Test Script
+
+Run `smoke_test.py` (added in repo) to automatically verify inference produces samples:
+
+```bash
+python smoke_test.py --base-url http://localhost:8000 \
+	--source sample-dataset/CIC-DDoS-2019-UDPLag.pcap \
+	--threshold 0.5
+```
+
+Exit code 0 = success (samples observed). Non‑zero = failure or timeout.
+
+### Presentation Checklist
+
+1. Problem framing: Describe DDoS detection challenge and need for lightweight inference.
+2. Data flow: capture → feature extraction → flow/window assembly → CNN predict → metrics & alerts.
+3. Model: Convolutional architecture; filename encodes time window (t) & max packets (n).
+4. Live loop: windows produce positive ratio + metrics; hysteresis reduces false alerts.
+5. Mitigation simulation: Escalates offending sources (monitor → rate-limit → blackhole) & tracks prevented downtime.
+6. Dashboard: WebSocket stream; charts & forecast (EWMA trend) + explainability (top feature z-scores).
+7. KPIs: TPR/FPR/TTD when labels known (dataset or override) plus cumulative positive_rate.
+8. Deployment: Native vs Docker, interpreter matching, tshark requirement.
+9. Extensions: Real packet filtering, persistence, retraining pipeline.
+10. Demo flow: Start benign PCAP → observe baseline → start attack PCAP → watch fraction rise & mitigation actions.
+
+Use this list as a live walkthrough script.
+
 
 
 ## Acknowledgements
